@@ -1,287 +1,452 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>REALM — Urban Battleground</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>REALM — Urban Battleground</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+<div id="damageVignette"></div>
+<div id="healFlash"></div>
 
-<!-- ═══════════════ CINEMATIC INTRO ═══════════════ -->
-<div id="cinematic" class="cinematic-overlay">
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="load-inner">
+    <div class="load-logo">REALM</div>
+    <div class="load-sub">INITIALIZING SYSTEMS</div>
+    <div class="load-bar-wrap"><div id="loadBar"></div></div>
+    <div id="loadStatus">Starting...</div>
+  </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="screen hidden">
+  <canvas id="loginBg"></canvas>
+  <div class="login-wrap">
+    <div class="login-box">
+      <div class="login-logo">REALM</div>
+      <div class="login-sub">URBAN BATTLEGROUND</div>
+      <div class="login-divider"></div>
+      <div class="login-field-group">
+        <div class="login-field">
+          <div class="lf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <input id="loginUser" class="login-input" type="text" placeholder="USERNAME" autocomplete="username" spellcheck="false"/>
+        </div>
+        <div class="login-field">
+          <div class="lf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <input id="loginPass" class="login-input" type="password" placeholder="PASSWORD" autocomplete="current-password"/>
+        </div>
+      </div>
+      <div id="loginError" class="login-error" style="display:none"></div>
+      <div id="loginSpinner" class="login-spinner" style="display:none"></div>
+      <div class="login-btns">
+        <button id="loginBtn" class="login-btn primary" onclick="doLogin()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          SIGN IN
+        </button>
+        <button id="registerBtn" class="login-btn" onclick="doRegister()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          CREATE ACCOUNT
+        </button>
+      </div>
+      <button class="guest-btn" onclick="doGuestPlay()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,8 12,12 14,14"/></svg>
+        CONTINUE AS GUEST
+      </button>
+      <div class="tg-note">Or open inside Telegram for auto-login</div>
+    </div>
+  </div>
+</div>
+
+<!-- CINEMATIC -->
+<div id="cinematic" class="hidden">
   <canvas id="introCanvas"></canvas>
-  <div class="cinematic-ui">
-    <div class="cin-text-wrap">
-      <div class="cin-line" id="cin1">REALM</div>
-      <div class="cin-sub" id="cin2">SIMULATION INITIALIZING</div>
-      <div class="cin-billboard" id="cin3">REALM ACTIVE</div>
-      <div class="cin-voice" id="cin4">"Welcome to REALM. This city is now the battlefield.<br>Only the strongest survive."</div>
-      <div class="cin-progress"><div class="cin-progress-bar" id="cinBar"></div></div>
-    </div>
-  </div>
-  <div class="cin-skip" onclick="skipIntro()">SKIP INTRO ›</div>
+  <div class="cin-skip" onclick="skipIntro()">SKIP</div>
 </div>
 
-<!-- ═══════════════ HOME SCREEN ═══════════════ -->
+<!-- HOME SCREEN -->
 <div id="homeScreen" class="screen hidden">
-  <div class="home-bg">
-    <canvas id="homeBgCanvas"></canvas>
-    <div class="home-overlay-grid"></div>
-  </div>
-
-  <!-- Top Bar -->
-  <div class="top-bar">
-    <div class="profile-chip" id="profileChip">
-      <img id="profileAvatar" src="" alt="" class="avatar-img" />
-      <div class="profile-info">
-        <span class="profile-name" id="profileName">AGENT</span>
-        <span class="profile-level" id="profileLevel">LVL 1</span>
+  <canvas id="homeBg"></canvas>
+  <div class="home-content">
+    <div class="top-bar">
+      <div class="profile-chip">
+        <div class="av-ring"><img id="profileAvatar" src="" alt="" onerror="this.style.display='none'"/></div>
+        <div><div class="p-name" id="profileName">AGENT</div><div class="p-lvl" id="profileLevel">LVL 1</div></div>
       </div>
-    </div>
-    <div class="top-stats">
-      <div class="stat-chip">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#f0c040"/><text x="12" y="16" text-anchor="middle" font-size="10" fill="#000" font-weight="bold">C</text></svg>
-        <span id="coinDisplay">0</span>
+      <div class="top-stats">
+        <div class="stat-pill gold">
+          <svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="9" fill="#f0c040"/><text x="10" y="14" text-anchor="middle" font-size="9" fill="#000" font-weight="bold">C</text></svg>
+          <span id="coinDisp">500</span>
+        </div>
+        <div class="stat-pill cyan">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="#00c8ff"><polygon points="10,2 13,8 19,9 14.5,13.5 16,20 10,16.5 4,20 5.5,13.5 1,9 7,8"/></svg>
+          <span id="xpDisp">0 XP</span>
+        </div>
       </div>
-      <div class="stat-chip">
-        <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" fill="#f0c040"/></svg>
-        <span id="xpDisplay">0 XP</span>
-      </div>
-    </div>
-    <button class="icon-btn" onclick="openSettings()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
-    </button>
-  </div>
-
-  <!-- Logo -->
-  <div class="home-logo">
-    <div class="logo-realm">REALM</div>
-    <div class="logo-tagline">URBAN BATTLEGROUND</div>
-    <div class="logo-pulse"></div>
-  </div>
-
-  <!-- Main Buttons -->
-  <div class="main-menu">
-    <button class="menu-btn primary" onclick="startGame('solo')">
-      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg></span>
-      <span class="btn-text">PLAY SOLO</span>
-      <span class="btn-arrow">›</span>
-    </button>
-    <button class="menu-btn" onclick="startGame('robots')">
-      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 012 2v1h3a1 1 0 011 1v2a1 1 0 01-1 1h-.5l-1 10H8.5l-1-10H7a1 1 0 01-1-1V6a1 1 0 011-1h3V4a2 2 0 012-2zm-2 7h4l.8 8H9.2L10 9zm-2-3v1h8V6H8z"/></svg></span>
-      <span class="btn-text">VS ROBOTS</span>
-      <span class="btn-arrow">›</span>
-    </button>
-    <button class="menu-btn" onclick="startGame('two-player')">
-      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg></span>
-      <span class="btn-text">TWO PLAYER</span>
-      <span class="btn-arrow">›</span>
-    </button>
-    <button class="menu-btn glow" onclick="startGame('multiplayer')">
-      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg></span>
-      <span class="btn-text">MULTIPLAYER</span>
-      <span class="btn-badge">ONLINE</span>
-      <span class="btn-arrow">›</span>
-    </button>
-    <div class="menu-row">
-      <button class="menu-btn half" onclick="openShop()">
-        <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.5 9H7L5.8 6zM3 2H1v2h2l3.6 7.6L5.2 14c-.1.3-.2.6-.2 1 0 1.1.9 2 2 2h14v-2H7.4c-.1 0-.2-.1-.2-.2l.1-.3 1-1.8H17c.8 0 1.4-.4 1.8-1l3.2-5.8c.2-.3.2-.8-.2-1.2-.2-.2-.5-.3-.8-.3H5.2L4.3 2H3z"/></svg></span>
-        <span class="btn-text">WEAPON SHOP</span>
+      <button class="icon-btn" onclick="openSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
-      <button class="menu-btn half" onclick="openUpgrade()">
-        <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7l8 5 8-5-8-5zM4 12l8 5 8-5M4 17l8 5 8-5"/></svg></span>
-        <span class="btn-text">UPGRADE</span>
+    </div>
+    <div class="home-logo-wrap">
+      <div class="logo-text">REALM</div>
+      <div class="logo-sub">URBAN BATTLEGROUND</div>
+    </div>
+    <div class="main-menu">
+      <button class="mbtn primary" onclick="startGame('solo')">
+        <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg></div>
+        <div class="ml"><span>SOLO EXPLORE</span><small>Free roam — no threats</small></div>
+        <div class="mbtn-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg></div>
       </button>
+      <button class="mbtn" onclick="startGame('agents')">
+        <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+        <div class="ml"><span>AGENTS BATTLE</span><small>Human + Anime soldiers</small></div>
+        <div class="mbtn-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg></div>
+      </button>
+      <button class="mbtn glow" onclick="openMultiMenu()">
+        <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg></div>
+        <div class="ml"><span>MULTIPLAYER</span><small>Real players online</small></div>
+        <div class="mbadge">LIVE</div>
+      </button>
+      <button class="mbtn" onclick="startGame('two-player')">
+        <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></div>
+        <div class="ml"><span>TWO PLAYER</span><small>1v1 same device</small></div>
+        <div class="mbtn-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg></div>
+      </button>
+      <div class="menu-row">
+        <button class="mbtn half" onclick="openShop()">
+          <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
+          <span>ARMORY</span>
+        </button>
+        <button class="mbtn half" onclick="openUpgrade()">
+          <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div>
+          <span>UPGRADE</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════ WEAPON SHOP ═══════════════ -->
+<!-- MULTIPLAYER MENU -->
+<div id="multiMenu" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title">MULTIPLAYER</div>
+    <div class="modal-sub" id="onlineCount">Searching...</div>
+    <button class="mbtn primary" onclick="createOnlineMatch()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      CREATE MATCH
+    </button>
+    <div class="div-or">— OR —</div>
+    <div class="join-row">
+      <input id="joinKey" class="key-input" placeholder="6-DIGIT KEY" maxlength="6" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"/>
+      <button class="mbtn" onclick="joinMatchByKey()">JOIN</button>
+    </div>
+    <button class="mbtn danger" onclick="closeMultiMenu()">BACK</button>
+  </div>
+</div>
+
+<!-- MATCH CREATED -->
+<div id="matchCreated" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title">MATCH CREATED</div>
+    <div class="match-key-disp" id="matchKeyDisp">——</div>
+    <div class="modal-sub">Expires in <span id="keyTimer">60</span>s — share this key!</div>
+    <div class="waiting-row">
+      <div class="wait-dot"></div><span id="waitStatus">Waiting for players...</span>
+    </div>
+    <button class="mbtn primary" onclick="startMatchNow()">START NOW</button>
+    <button class="mbtn danger" onclick="cancelMatch()">CANCEL</button>
+  </div>
+</div>
+
+<!-- SHOP -->
 <div id="shopScreen" class="screen hidden">
   <div class="shop-header">
-    <button class="back-btn" onclick="closeShop()">‹ BACK</button>
-    <h2 class="shop-title">WEAPON SHOP</h2>
-    <div class="coins-display">
-      <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="#f0c040"/><text x="12" y="16" text-anchor="middle" font-size="10" fill="#000" font-weight="bold">C</text></svg>
-      <span id="shopCoins">0</span>
+    <button class="back-btn" onclick="closeShop()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg> BACK
+    </button>
+    <span class="screen-title">ARMORY</span>
+    <div class="stat-pill gold" style="margin-left:auto">
+      <svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="9" fill="#f0c040"/></svg>
+      <span id="shopCoins">500</span>
     </div>
+  </div>
+  <div class="shop-tabs">
+    <button class="stab active" onclick="filterShop('all',this)">ALL</button>
+    <button class="stab" onclick="filterShop('rifle',this)">RIFLES</button>
+    <button class="stab" onclick="filterShop('pistol',this)">PISTOLS</button>
+    <button class="stab" onclick="filterShop('heavy',this)">HEAVY</button>
+    <button class="stab" onclick="filterShop('gear',this)">GEAR</button>
   </div>
   <div class="shop-grid" id="shopGrid"></div>
 </div>
 
-<!-- ═══════════════ SETTINGS ═══════════════ -->
+<!-- SETTINGS -->
 <div id="settingsScreen" class="screen hidden">
   <div class="shop-header">
-    <button class="back-btn" onclick="closeSettings()">‹ BACK</button>
-    <h2 class="shop-title">SETTINGS</h2>
+    <button class="back-btn" onclick="closeSettings()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg> BACK</button>
+    <span class="screen-title">SETTINGS</span>
   </div>
   <div class="settings-body">
-    <div class="setting-row">
-      <span>Music</span>
-      <label class="toggle"><input type="checkbox" id="musicToggle" checked onchange="toggleMusic(this.checked)"><span class="slider"></span></label>
-    </div>
-    <div class="setting-row">
-      <span>Sound FX</span>
-      <label class="toggle"><input type="checkbox" id="sfxToggle" checked onchange="toggleSFX(this.checked)"><span class="slider"></span></label>
-    </div>
-    <div class="setting-row">
-      <span>Graphics</span>
-      <select id="graphicsSelect" class="settings-select">
-        <option value="ultra">Ultra</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-      </select>
-    </div>
-    <div class="setting-row">
-      <span>Upload Music (.mp3)</span>
-      <label class="file-upload-btn">
-        CHOOSE FILE
-        <input type="file" accept=".mp3,audio/*" onchange="uploadMusic(this)" style="display:none"/>
-      </label>
-    </div>
-    <div class="setting-row" id="currentMusicRow" style="display:none">
-      <span>Now Playing</span>
-      <span id="currentMusicName" class="music-name">—</span>
+    <div class="srow"><span>Music</span><label class="tog"><input type="checkbox" id="musicTog" checked onchange="toggleMusic(this.checked)"><span class="ts"></span></label></div>
+    <div class="srow"><span>Sound FX</span><label class="tog"><input type="checkbox" id="sfxTog" checked onchange="window._sfxOn=this.checked"><span class="ts"></span></label></div>
+    <div class="srow"><span>Graphics</span><select class="s-sel" id="gfxSel"><option>Ultra</option><option>High</option><option>Medium</option></select></div>
+    <div class="srow"><span>Custom Music (.mp3)</span><label class="upload-btn">UPLOAD .MP3<input type="file" accept=".mp3,audio/*" onchange="uploadMusic(this)" style="display:none"/></label></div>
+    <div class="srow hidden" id="musicRow"><span>Playing</span><span id="musicNameDisp" style="color:#0ff;font-size:.7rem">—</span></div>
+    <div class="srow">
+      <span>Account</span>
+      <button class="upload-btn" onclick="doLogout()" style="border-color:#ff3c5f;color:#ff3c5f">SIGN OUT</button>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════ GAME CANVAS ═══════════════ -->
+<!-- UPGRADE -->
+<div id="upgradeScreen" class="screen hidden">
+  <div class="shop-header">
+    <button class="back-btn" onclick="closeUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg> BACK</button>
+    <span class="screen-title">CHARACTER UPGRADE</span>
+    <div class="stat-pill gold" style="margin-left:auto"><svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="9" fill="#f0c040"/></svg><span id="coinDisp2">500</span></div>
+  </div>
+  <div class="upgrade-body" id="upgradeBody"></div>
+</div>
+
+<!-- GAME -->
 <div id="gameContainer" class="hidden">
   <canvas id="gameCanvas"></canvas>
-
-  <!-- HUD -->
-  <div id="hud" class="hud">
-    <div class="hud-health">
-      <div class="hud-label">HEALTH</div>
-      <div class="hud-bar-wrap"><div class="hud-bar health-bar" id="healthBar"></div></div>
-      <span id="healthVal">100</span>
+  <div id="hud">
+    <!-- Top left: pause + lives -->
+    <div class="hud-topleft">
+      <button class="pause-btn" onclick="pauseGame()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
+      <div id="livesRow" style="display:flex;gap:4px;align-items:center">
+        <span style="color:#ff4444;font-size:1.1rem">&#9632;</span>
+        <span style="color:#ff4444;font-size:1.1rem">&#9632;</span>
+      </div>
     </div>
+    <!-- Minimap: top left (below pause) -->
+    <div class="minimap-wrap"><canvas id="minimap" width="130" height="130"></canvas></div>
+    <!-- Top center: mode + timer + kills -->
     <div class="hud-center">
       <div class="hud-mode" id="hudMode">SOLO</div>
-      <div class="hud-timer" id="hudTimer">05:00</div>
-      <div class="hud-kills">
-        <span id="killCount">0</span> KILLS
+      <div class="hud-timer" id="hudTimer">∞</div>
+      <div class="hud-kills"><span id="killCount">0</span> KILLS</div>
+    </div>
+    <!-- Top right: ammo + weapon -->
+    <div class="hud-topright">
+      <div class="hud-ammo">
+        <div class="ammo-main"><span id="ammoMag">30</span><span class="slash">/</span><span id="ammoRes">90</span></div>
+        <div class="wep-name" id="wepName">M4A1</div>
       </div>
     </div>
-    <div class="hud-ammo">
-      <div class="hud-label">AMMO</div>
-      <div class="ammo-display">
-        <span id="ammoCount">30</span><span class="ammo-sep">/</span><span id="ammoReserve">90</span>
+    <!-- Bottom left: HP + Armor -->
+    <div class="hud-stats">
+      <div class="hud-stat-row">
+        <div class="hud-lbl">HP</div>
+        <div class="hud-track"><div id="healthBar" class="hud-bar hp"></div></div>
+        <span id="healthVal">100</span>
       </div>
-      <div class="weapon-name" id="weaponName">M4A1</div>
+      <div class="hud-stat-row">
+        <div class="hud-lbl">AR</div>
+        <div class="hud-track"><div id="armorBar" class="hud-bar ar"></div></div>
+        <span id="armorVal">0</span>
+      </div>
     </div>
-    <div class="hud-minimap">
-      <canvas id="minimap" width="120" height="120"></canvas>
-      <div class="minimap-label">MAP</div>
+    <!-- Bottom right: gear -->
+    <div class="hud-gear">
+      <div class="gear-slot" onclick="doGrenade()">
+        <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="14" r="7" fill="#448822"/><rect x="10" y="4" width="4" height="6" fill="#888"/><rect x="8" y="6" width="8" height="3" rx="1.5" fill="#aaa"/></svg>
+        <span id="grenCount">2</span>
+      </div>
+      <div class="gear-slot" onclick="doHeal()">
+        <svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="8" width="16" height="12" rx="2" fill="#dd2244"/><rect x="9" y="11" width="6" height="2.5" rx="1" fill="#fff"/><rect x="10.75" y="9.5" width="2.5" height="6" rx="1" fill="#fff"/></svg>
+        <span id="medCount">1</span>
+      </div>
     </div>
+    <!-- Camera toggle -->
+    <div class="cam-mode-btn" onclick="toggleCameraMode()" id="camBtn">3P</div>
   </div>
 
   <!-- Crosshair -->
-  <div id="crosshair" class="crosshair">
-    <div class="ch-line ch-top"></div>
-    <div class="ch-line ch-bottom"></div>
-    <div class="ch-line ch-left"></div>
-    <div class="ch-line ch-right"></div>
-    <div class="ch-dot"></div>
+  <div id="crosshair">
+    <div class="cht"></div><div class="chb"></div>
+    <div class="chl"></div><div class="chr"></div>
+    <div class="chd"></div>
   </div>
 
-  <!-- Kill Feed -->
-  <div id="killFeed" class="kill-feed"></div>
+  <!-- Kill feed -->
+  <div id="killFeed"></div>
+  <!-- Pickup notif -->
+  <div id="pickupNotif" class="pickup-notif hidden"></div>
 
-  <!-- Mobile Controls -->
-  <div id="mobileControls" class="mobile-controls">
-    <div class="left-controls">
-      <div id="joystick" class="joystick-wrap">
-        <div class="joystick-base">
-          <div class="joystick-knob" id="joystickKnob"></div>
-        </div>
+  <!-- Mobile Controls (on foot) -->
+  <div id="mobileControls">
+    <div class="ctrl-left">
+      <div id="joyBase" class="joy-base"><div id="joyKnob" class="joy-knob"></div></div>
+    </div>
+    <div class="ctrl-right">
+      <div class="cr-row1">
+        <button class="ctrl-btn sm" ontouchstart="doJump()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>JUMP
+        </button>
+        <button class="ctrl-btn sm" ontouchstart="doDash()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M13 2.5L4.5 11H10v10.5L18.5 13H13V2.5z"/></svg>DASH
+        </button>
       </div>
-      <div class="action-btns-left">
-        <button class="ctrl-btn" id="crouchBtn" ontouchstart="startAction('crouch')" ontouchend="endAction('crouch')">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a2 2 0 100-4 2 2 0 000 4zm-5 7h10l-2-6H9l-2 6zm-1 2v4h2v-3h8v3h2v-4H6z"/></svg>
-          CROUCH
+      <div class="cr-row2">
+        <button class="ctrl-btn" ontouchstart="startCrouch()" ontouchend="stopCrouch()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 9a2 2 0 100-4 2 2 0 000 4zm-3 9v-4l-2-2 2-4h6l2 4-2 2v4h-6z"/></svg>DUCK
         </button>
-        <button class="ctrl-btn" id="jumpBtn" ontouchstart="startAction('jump')" ontouchend="endAction('jump')">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 6h3v6H9l3 4 3-4h-2V6h3L12 2zm-5 16v2h10v-2H7z"/></svg>
-          JUMP
+        <button class="fire-btn" id="fireBtn" ontouchstart="startFiring()" ontouchend="stopFiring()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 11l-5-3 5-3v6z"/></svg>FIRE
         </button>
-        <button class="ctrl-btn" id="dashBtn" ontouchstart="startAction('dash')" ontouchend="endAction('dash')">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2.5L4.5 11H10v10.5l9.5-8.5H14V2.5z"/></svg>
-          DASH
+        <button class="ctrl-btn aim-btn" ontouchstart="startAiming()" ontouchend="stopAiming()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>AIM
+        </button>
+      </div>
+      <div class="cr-row3">
+        <button class="ctrl-btn" onclick="toggleVehicle()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>CAR
+        </button>
+        <button class="ctrl-btn" onclick="doReload()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>RELOAD
+        </button>
+        <button class="ctrl-btn shop-c" onclick="openInGameShop()">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 6.1 17 6.9 17H19v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63H15c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0019.46 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>SHOP
         </button>
       </div>
     </div>
-    <div class="right-controls">
-      <button class="fire-btn" id="fireBtn" ontouchstart="startShooting()" ontouchend="stopShooting()">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h14.17l-4.58-4.59L14 5l7 7-7 7-1.41-1.42L16.17 13H3v-2z"/></svg>
-        FIRE
+  </div>
+
+  <!-- Drive Controls -->
+  <div id="driveControls" class="hidden">
+    <div class="drive-left">
+      <button class="drive-btn" ontouchstart="driveSteer(-1)" ontouchend="driveSteer(0)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
       </button>
-      <div class="right-secondary">
-        <button class="ctrl-btn" id="aimBtn" ontouchstart="startAiming()" ontouchend="stopAiming()">AIM</button>
-        <button class="ctrl-btn" id="reloadBtn" onclick="reloadWeapon()">RELOAD</button>
-        <button class="ctrl-btn" id="vehicleBtn" onclick="toggleVehicle()">VEHICLE</button>
-        <button class="ctrl-btn shop-ctrl-btn" onclick="openInGameShop()">SHOP</button>
-      </div>
+      <button class="drive-btn brake-btn" ontouchstart="driveBrake(true)" ontouchend="driveBrake(false)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+        <span>BRAKE</span>
+      </button>
+      <button class="drive-btn" ontouchstart="driveSteer(1)" ontouchend="driveSteer(0)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </button>
+    </div>
+    <div class="drive-right">
+      <button class="drive-btn gas-btn" ontouchstart="driveGas(true)" ontouchend="driveGas(false)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+        <span>GAS</span>
+      </button>
+      <button class="drive-btn exit-btn" onclick="toggleVehicle()">EXIT</button>
     </div>
   </div>
-
-  <!-- Pause / Exit -->
-  <button class="pause-btn" onclick="pauseGame()">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-  </button>
 </div>
 
-<!-- ═══════════════ PAUSE MENU ═══════════════ -->
-<div id="pauseMenu" class="pause-overlay hidden">
-  <div class="pause-box">
-    <div class="pause-title">PAUSED</div>
-    <button class="menu-btn" onclick="resumeGame()">RESUME</button>
-    <button class="menu-btn" onclick="openInGameShop()">SHOP</button>
-    <button class="menu-btn danger" onclick="exitToMenu()">EXIT TO MENU</button>
+<!-- PAUSE -->
+<div id="pauseMenu" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title">PAUSED</div>
+    <button class="mbtn primary" onclick="resumeGame()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg></div>RESUME
+    </button>
+    <button class="mbtn" onclick="openInGameShop()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 6.1 17 6.9 17H19v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63H15c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0019.46 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></div>ARMORY
+    </button>
+    <button class="mbtn" onclick="toggleCameraMode()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></div>TOGGLE VIEW
+    </button>
+    <button class="mbtn danger" onclick="exitToMenu()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg></div>EXIT
+    </button>
   </div>
 </div>
 
-<!-- ═══════════════ IN-GAME SHOP ═══════════════ -->
-<div id="inGameShop" class="in-game-shop hidden">
-  <div class="igs-header">
-    <span class="igs-title">ARMORY</span>
-    <button class="igs-close" onclick="closeInGameShop()">✕</button>
+<!-- IN-GAME SHOP -->
+<div id="inGameShop" class="igs-overlay hidden">
+  <div class="igs-box">
+    <div class="igs-head">
+      <span>ARMORY</span>
+      <button class="igs-close" onclick="closeInGameShop()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="igs-grid" id="igsGrid"></div>
   </div>
-  <div class="igs-grid" id="igsGrid"></div>
 </div>
 
-<!-- ═══════════════ GAME OVER ═══════════════ -->
-<div id="gameOver" class="game-over-overlay hidden">
-  <div class="go-box">
-    <div class="go-title" id="goTitle">ELIMINATED</div>
+<!-- GAME OVER -->
+<div id="gameOver" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div id="goTitle" class="go-title">YOU DIED</div>
+    <div class="go-dead-icon">
+      <svg viewBox="0 0 80 60" width="120" height="90">
+        <!-- Dead soldier lying down -->
+        <ellipse cx="40" cy="45" rx="30" ry="8" fill="rgba(0,0,0,0.4)"/>
+        <!-- Body horizontal -->
+        <rect x="10" y="30" width="50" height="14" rx="5" fill="#1a3a7a"/>
+        <!-- Head -->
+        <ellipse cx="62" cy="32" rx="10" ry="9" fill="#d4a070"/>
+        <!-- Helmet -->
+        <ellipse cx="62" cy="28" rx="11" ry="7" fill="#223311"/>
+        <!-- Arms sprawled -->
+        <rect x="8" y="26" width="22" height="8" rx="4" fill="#1a3a7a" transform="rotate(-25,8,30)"/>
+        <rect x="52" y="26" width="22" height="8" rx="4" fill="#1a3a7a" transform="rotate(15,52,30)"/>
+        <!-- Blood pool -->
+        <ellipse cx="55" cy="46" rx="14" ry="5" fill="rgba(180,0,0,0.55)"/>
+        <!-- X eyes -->
+        <line x1="58" y1="30" x2="62" y2="34" stroke="#333" stroke-width="2"/>
+        <line x1="62" y1="30" x2="58" y2="34" stroke="#333" stroke-width="2"/>
+        <line x1="64" y1="30" x2="68" y2="34" stroke="#333" stroke-width="2"/>
+        <line x1="68" y1="30" x2="64" y2="34" stroke="#333" stroke-width="2"/>
+      </svg>
+    </div>
     <div class="go-stats">
-      <div class="go-stat"><span>KILLS</span><span id="goKills">0</span></div>
-      <div class="go-stat"><span>TIME</span><span id="goTime">0:00</span></div>
-      <div class="go-stat"><span>XP EARNED</span><span id="goXP">+0</span></div>
-      <div class="go-stat"><span>COINS</span><span id="goCoins">+0</span></div>
+      <div class="go-stat"><span>KILLS</span><b id="goKills">0</b></div>
+      <div class="go-stat"><span>TIME</span><b id="goTime">0:00</b></div>
+      <div class="go-stat"><span>XP</span><b id="goXP">+0</b></div>
+      <div class="go-stat"><span>COINS</span><b id="goCoins">+0</b></div>
     </div>
-    <button class="menu-btn primary" onclick="playAgain()">PLAY AGAIN</button>
-    <button class="menu-btn" onclick="exitToMenu()">MAIN MENU</button>
+    <button class="mbtn primary" onclick="playAgain()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></div>
+      PLAY AGAIN
+    </button>
+    <button class="mbtn" onclick="exitToMenu()">
+      <div class="mbtn-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></div>
+      MAIN MENU
+    </button>
   </div>
 </div>
 
-<!-- Audio -->
-<audio id="bgMusic" loop></audio>
-<audio id="sfxShoot" src=""></audio>
-
+<audio id="bgMusic" loop preload="auto"></audio>
+<script src="config.js"></script>
 <script src="auth.js"></script>
+<script src="audio.js"></script>
 <script src="weapons.js"></script>
 <script src="characters.js"></script>
 <script src="vehicles.js"></script>
 <script src="multiplayer.js"></script>
+<script src="world.js"></script>
 <script src="ui.js"></script>
 <script src="game.js"></script>
+<script>
+// Login background canvas
+window.addEventListener('DOMContentLoaded',()=>{
+  const c=document.getElementById('loginBg');
+  if(!c) return;
+  c.width=window.innerWidth;c.height=window.innerHeight;
+  const ctx=c.getContext('2d');
+  const pts=Array.from({length:50},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.2+.3,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,life:Math.random()}));
+  function draw(){c.width=window.innerWidth;
+    const bg=ctx.createLinearGradient(0,0,0,c.height);bg.addColorStop(0,'#020510');bg.addColorStop(1,'#040c1a');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+    pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>c.width)p.vx*=-1;if(p.y<0||p.y>c.height)p.vy*=-1;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(0,200,255,${p.life*.5})`;ctx.fill();});
+    requestAnimationFrame(draw);}
+  draw();
+});
+</script>
 </body>
 </html>

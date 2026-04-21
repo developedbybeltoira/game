@@ -1,959 +1,795 @@
-// ══════════════════════════════════════════════════
-//  game.js — Main Engine, City World, Game Loop
-// ══════════════════════════════════════════════════
-
+// game.js — Main engine, helicopter cinematic intro, game loop
 window.gameRunning = false;
-window.gamePaused = false;
-window._currentMode = 'solo';
-window._scene = null;
-window._camera = null;
-window._renderer = null;
-window._wallMeshes = [];
-window._buildingBounds = [];
-window._sfxEnabled = true;
+window.gamePaused  = false;
+window._camMode    = '3rd';
+window._currentMode= 'solo';
+window._lives      = 2;
+window._gameTime   = 0;
 
-// ──────────────────────────────────────────────────
-// Boot sequence
-// ──────────────────────────────────────────────────
+// Camera look angles
+let _camYaw   = 0;
+let _camPitch = -0.18;
+let _pointerLocked = false;
+
+// ─────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
+  setLoad(2, 'Starting...');
   await initAuth();
-  playIntro();
-  initHomeBg();
+  setLoad(90, 'Ready!');
+  await new Promise(r => setTimeout(r, 300));
+  document.getElementById('loadingScreen').classList.add('hidden');
+
+  const tg = window.Telegram?.WebApp;
+  const hasTG = tg?.initDataUnsafe?.user;
+  const hasSaved = !!localStorage.getItem('realm_session');
+  if (!hasTG && !hasSaved) {
+    document.getElementById('loginScreen').classList.remove('hidden');
+    animateLoginBg();
+  } else {
+    startCinematic();
+  }
 });
 
-// ──────────────────────────────────────────────────
-// CINEMATIC INTRO
-// ──────────────────────────────────────────────────
-function playIntro() {
-  const canvas = document.getElementById('introCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  let t = 0;
-  const buildings = Array.from({ length: 18 }, () => ({
-    x: Math.random() * window.innerWidth,
-    w: 40 + Math.random() * 80,
-    h: 80 + Math.random() * 220,
-    lit: Math.random() > 0.3,
-  }));
-
-  // Cars
-  const cars = Array.from({ length: 8 }, () => ({
-    x: Math.random() * window.innerWidth,
-    y: window.innerHeight * 0.72 + Math.random() * 30,
-    speed: 1.5 + Math.random() * 2,
-    color: `hsl(${Math.random() * 360},60%,55%)`,
-  }));
-
-  const DURATION = 7000;
-  const start = Date.now();
-  const bar = document.getElementById('cinBar');
-
-  function drawFrame() {
-    const elapsed = Date.now() - start;
-    const prog = Math.min(elapsed / DURATION, 1);
-    if (bar) bar.style.width = (prog * 100) + '%';
-    t += 0.016;
-
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    // Sky gradient (sunset)
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, `hsl(${20 + Math.sin(t*0.1)*10},60%,${8 + prog*5}%)`);
-    sky.addColorStop(0.4, `hsl(${30},70%,${12 + prog*8}%)`);
-    sky.addColorStop(0.65, `hsl(${200},50%,${15}%)`);
-    sky.addColorStop(1, '#050810');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-
-    // Sun/glow on horizon
-    const sunX = W * 0.6, sunY = H * 0.55;
-    const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, H * 0.4);
-    sunGlow.addColorStop(0, `rgba(255,160,60,${0.25 * (1 - prog * 0.3)})`);
-    sunGlow.addColorStop(0.4, `rgba(255,80,20,0.08)`);
-    sunGlow.addColorStop(1, 'transparent');
-    ctx.fillStyle = sunGlow;
-    ctx.fillRect(0, 0, W, H);
-
-    // Ground / road
-    const road = ctx.createLinearGradient(0, H*0.65, 0, H);
-    road.addColorStop(0, '#1a1a2a');
-    road.addColorStop(1, '#0d0d16');
-    ctx.fillStyle = road;
-    ctx.fillRect(0, H * 0.65, W, H * 0.35);
-
-    // Road lane markings
-    ctx.strokeStyle = `rgba(255,220,80,${0.4})`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([30, 20]);
-    ctx.beginPath();
-    ctx.moveTo(0, H * 0.74);
-    ctx.lineTo(W, H * 0.74);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Buildings (silhouette)
-    buildings.forEach((b, i) => {
-      const baseY = H * 0.65;
-      const bx = (b.x + t * (i % 3 === 0 ? 0.4 : 0)) % (W + b.w) - b.w;
-
-      // Building shadow
-      ctx.fillStyle = `rgba(0,0,0,0.4)`;
-      ctx.fillRect(bx + 5, baseY - b.h + 5, b.w, b.h);
-
-      // Building body
-      const grad = ctx.createLinearGradient(bx, baseY - b.h, bx + b.w, baseY);
-      grad.addColorStop(0, `hsl(220,20%,${10 + Math.random()*2}%)`);
-      grad.addColorStop(1, `hsl(220,15%,8%)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(bx, baseY - b.h, b.w, b.h);
-
-      // Windows
-      if (b.lit) {
-        const rows = Math.floor(b.h / 18);
-        const cols = Math.floor(b.w / 14);
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const wx = bx + 4 + c * 14;
-            const wy = baseY - b.h + 8 + r * 18;
-            const on = Math.sin(i * 3.7 + r * 1.3 + c * 2.1 + t * 0.3) > 0.1;
-            if (on) {
-              ctx.fillStyle = `rgba(255,220,120,${0.5 + Math.sin(t + i) * 0.1})`;
-              ctx.fillRect(wx, wy, 8, 10);
-            }
-          }
-        }
-      }
-
-      // Billboard effect (some buildings)
-      if (i % 4 === 0 && prog > 0.3) {
-        ctx.fillStyle = `rgba(0,200,255,${(prog - 0.3) * 0.9})`;
-        ctx.font = `bold ${Math.floor(b.w * 0.18)}px 'Orbitron', monospace`;
-        ctx.fillText('REALM ACTIVE', bx + 4, baseY - b.h * 0.7);
-      }
-    });
-
-    // Street lights
-    for (let sl = 0; sl < 8; sl++) {
-      const slx = (sl / 8) * W + 40;
-      const sly = H * 0.65;
-      ctx.strokeStyle = '#888';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(slx, sly);
-      ctx.lineTo(slx, sly - 60);
-      ctx.lineTo(slx + 15, sly - 60);
-      ctx.stroke();
-      // Glow
-      const glow = ctx.createRadialGradient(slx + 15, sly - 55, 0, slx + 15, sly - 55, 25);
-      glow.addColorStop(0, `rgba(255,230,150,${0.5 + prog * 0.3})`);
-      glow.addColorStop(1, 'transparent');
-      ctx.fillStyle = glow;
-      ctx.fillRect(slx - 10, sly - 80, 50, 50);
-    }
-
-    // Cars
-    cars.forEach(car => {
-      car.x = (car.x + car.speed) % (W + 80);
-      ctx.fillStyle = car.color;
-      ctx.fillRect(car.x, car.y, 36, 16);
-      // Headlights
-      ctx.fillStyle = 'rgba(255,255,200,0.9)';
-      ctx.fillRect(car.x + 32, car.y + 3, 4, 4);
-      ctx.fillRect(car.x + 32, car.y + 9, 4, 4);
-      // Tail lights
-      ctx.fillStyle = 'rgba(255,30,30,0.7)';
-      ctx.fillRect(car.x, car.y + 3, 3, 4);
-      ctx.fillRect(car.x, car.y + 9, 3, 4);
-    });
-
-    // Scanline overlay
-    for (let sy = 0; sy < H; sy += 3) {
-      ctx.fillStyle = 'rgba(0,0,0,0.04)';
-      ctx.fillRect(0, sy, W, 1);
-    }
-
-    // Vignette
-    const vig = ctx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.8);
-    vig.addColorStop(0, 'transparent');
-    vig.addColorStop(1, 'rgba(0,0,0,0.6)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, W, H);
-
-    if (prog < 1) {
-      requestAnimationFrame(drawFrame);
-    } else {
-      skipIntro();
-    }
-  }
-  drawFrame();
-}
-
-function skipIntro() {
-  const cin = document.getElementById('cinematic');
-  if (cin) {
-    cin.style.transition = 'opacity 0.6s ease';
-    cin.style.opacity = '0';
-    setTimeout(() => {
-      cin.classList.add('hidden');
-      showScreen('homeScreen');
-    }, 600);
-  }
-}
-
-// ──────────────────────────────────────────────────
-// Home Background (animated city particle scene)
-// ──────────────────────────────────────────────────
-function initHomeBg() {
-  const canvas = document.getElementById('homeBgCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  const particles = Array.from({ length: 60 }, () => ({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    r: Math.random() * 2 + 0.5,
-    vx: (Math.random() - 0.5) * 0.3,
-    vy: -Math.random() * 0.5 - 0.2,
-    life: Math.random(),
-  }));
-
+// ─────────────────────────────────────────────────────────────────────
+// LOGIN BACKGROUND
+// ─────────────────────────────────────────────────────────────────────
+function animateLoginBg() {
+  const c = document.getElementById('loginBg'); if (!c) return;
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  const pts = Array.from({length:55},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.2+.3,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,life:Math.random()}));
+  const buildings = Array.from({length:18},(_,i)=>({x:i*(c.width/16),w:35+Math.random()*70,h:80+Math.random()*210}));
+  let running = true;
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Background gradient
-    const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    bg.addColorStop(0, '#020510');
-    bg.addColorStop(0.6, '#040c1a');
-    bg.addColorStop(1, '#020510');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    if (!running) return;
+    c.width = window.innerWidth; c.height = window.innerHeight;
+    const W=c.width,H=c.height;
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#020510');bg.addColorStop(.6,'#040c1a');bg.addColorStop(1,'#020510');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
     // City silhouette
-    ctx.fillStyle = 'rgba(10,20,40,0.8)';
-    const W = canvas.width, H = canvas.height;
-    ctx.beginPath();
-    ctx.moveTo(0, H * 0.7);
-    for (let x = 0; x < W; x += 30) {
-      const bh = 100 + Math.sin(x * 0.05) * 80 + Math.sin(x * 0.02) * 60;
-      ctx.lineTo(x, H * 0.7 - bh);
-      ctx.lineTo(x + 25, H * 0.7 - bh);
-    }
-    ctx.lineTo(W, H * 0.7);
-    ctx.closePath();
-    ctx.fill();
-
+    ctx.fillStyle='rgba(12,18,38,0.92)';
+    ctx.beginPath();ctx.moveTo(0,H*.72);
+    buildings.forEach(b=>{ctx.lineTo(b.x,H*.72-b.h);ctx.lineTo(b.x+b.w,H*.72-b.h);});
+    ctx.lineTo(W,H*.72);ctx.closePath();ctx.fill();
     // Particles
-    particles.forEach(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 0.003;
-      if (p.life <= 0 || p.y < 0) {
-        p.x = Math.random() * W;
-        p.y = H;
-        p.life = 0.7 + Math.random() * 0.3;
-      }
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(0,200,255,${p.life * 0.6})`;
-      ctx.fill();
+    pts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,200,255,${p.life*.45})`;ctx.fill();
     });
-
     requestAnimationFrame(draw);
   }
   draw();
-
-  window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  });
+  document.getElementById('loginScreen').addEventListener('transitionend',()=>{running=false;},{once:true});
 }
 
-// ──────────────────────────────────────────────────
-// START GAME
-// ──────────────────────────────────────────────────
-function startGame(mode) {
-  window._currentMode = mode;
-  window.currentPlayer.kills = 0;
-  window._playerState.health = window._playerState.maxHealth;
+// ─────────────────────────────────────────────────────────────────────
+// HELICOPTER CINEMATIC INTRO
+// ─────────────────────────────────────────────────────────────────────
+let _cinSkipped = false;
 
-  showScreen('gameContainer');
-  document.getElementById('hudMode').textContent = mode.toUpperCase().replace('-', ' ');
+function startCinematic() {
+  document.getElementById('cinematic').classList.remove('hidden');
+  const canvas = document.getElementById('introCanvas');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+  const ctx = canvas.getContext('2d');
+  runCinematic(ctx, canvas);
+}
 
-  // Destroy previous scene
-  if (window._renderer) {
-    window._renderer.dispose();
-    window._renderer = null;
-    window._scene = null;
-    window._camera = null;
+function runCinematic(ctx, canvas) {
+  _cinSkipped = false;
+  let t = 0;
+  let screenShake = 0;
+  let flashAlpha = 0;
+  let playerDeadAlpha = 0;
+  let titleAlpha = 0;
+  let subtitleAlpha = 0;
+  let helicopterX = -0.5, helicopterY = 0.12;
+  let spotlightOn = false;
+  let enemyRopeY = -0.2;
+  let enemyLanded = false;
+  let muzzleFlash = 0;
+  let bloodAlpha = 0;
+  let fadeBlack = 0;
+
+  // City buildings
+  const W = () => canvas.width, H = () => canvas.height;
+  const buildings = Array.from({length:20},(_,i)=>({
+    x: i*(W()/18), w: 38+Math.random()*80, h: 85+Math.random()*240,
+    wins: Array.from({length:50},()=>({ox:Math.random(),oy:Math.random(),on:Math.random()>.3,fl:Math.random()>.9}))
+  }));
+  const cars = Array.from({length:5},()=>({x:-80+Math.random()*300,speed:1.5+Math.random()*2,col:`hsl(${Math.random()*360},55%,48%)`}));
+
+  function drawBuilding(b) {
+    const base=H()*.66;
+    ctx.fillStyle='rgba(20,26,40,0.98)';
+    ctx.fillRect(b.x,base-b.h,b.w,b.h);
+    // Horizontal bands
+    for(let r=0;r<Math.floor(b.h/22);r++){
+      ctx.fillStyle='rgba(30,38,58,0.6)';
+      ctx.fillRect(b.x+1,base-b.h+r*22,b.w-2,0.5);
+    }
+    // Windows
+    const cols=Math.max(2,Math.floor(b.w/16));
+    const rows=Math.max(3,Math.floor(b.h/22));
+    b.wins.forEach((w,wi)=>{
+      if(w.fl&&Math.random()>.94)w.on=!w.on;
+      if(!w.on) return;
+      const wx=b.x+3+(wi%cols)*(b.w/cols);
+      const wy=base-b.h+5+Math.floor(wi/cols)*(b.h/rows);
+      ctx.fillStyle=Math.random()>.5?`rgba(255,220,110,0.65)`:`rgba(140,190,255,0.5)`;
+      ctx.fillRect(wx,wy,b.w/cols-4,b.h/rows-6);
+    });
+    // Rooftop
+    ctx.fillStyle='rgba(40,50,70,0.9)';
+    ctx.fillRect(b.x,base-b.h-2,b.w,3);
   }
-  window._enemies = [];
-  window._bystanders = [];
-  window._vehicles = [];
-  window._wallMeshes = [];
-  window._buildingBounds = [];
-  document.querySelectorAll('.player-name-tag').forEach(el => el.remove());
+
+  function drawRoad() {
+    const ry=H()*.66;
+    const rg=ctx.createLinearGradient(0,ry,0,H());
+    rg.addColorStop(0,'#14181e');rg.addColorStop(1,'#0a0c10');
+    ctx.fillStyle=rg;ctx.fillRect(0,ry,W(),H()-ry);
+    // Sidewalks
+    ctx.fillStyle='#1e2228';
+    ctx.fillRect(0,ry,W()*.12,H()-ry);
+    ctx.fillRect(W()*.88,ry,W()*.12,H()-ry);
+    // Yellow center line
+    ctx.strokeStyle='rgba(230,180,0,0.65)';ctx.lineWidth=2.5;ctx.setLineDash([28,18]);
+    ctx.beginPath();ctx.moveTo(0,H()*.78);ctx.lineTo(W(),H()*.78);ctx.stroke();ctx.setLineDash([]);
+    // White shoulder lines
+    ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(0,H()*.69);ctx.lineTo(W(),H()*.69);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,H()*.95);ctx.lineTo(W(),H()*.95);ctx.stroke();
+  }
+
+  function drawStreetLights() {
+    for(let i=0;i<6;i++){
+      const slx=(i/5)*W()*.85+W()*.07;
+      const sly=H()*.63;
+      ctx.strokeStyle='rgba(100,110,130,0.9)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(slx,sly);ctx.lineTo(slx,sly-52);
+      ctx.lineTo(slx+18,sly-52);ctx.stroke();
+      // Light head
+      ctx.fillStyle='rgba(50,50,60,0.9)';
+      ctx.fillRect(slx+12,sly-57,16,10);
+      // Glow
+      const glowG=ctx.createRadialGradient(slx+20,sly-50,0,slx+20,sly-50,35);
+      glowG.addColorStop(0,`rgba(255,190,80,${0.35+Math.sin(t*.03)*.05})`);
+      glowG.addColorStop(1,'transparent');
+      ctx.fillStyle=glowG;ctx.fillRect(slx-15,sly-85,70,60);
+    }
+  }
+
+  function drawCar(car) {
+    car.x+=car.speed;if(car.x>W()+120)car.x=-120;
+    const cy=H()*.815;const sc=0.62;
+    ctx.save();ctx.translate(car.x,cy);
+    ctx.fillStyle=car.col;ctx.fillRect(-26*sc,-17*sc,52*sc,15*sc);
+    ctx.fillStyle=car.col;ctx.fillRect(-16*sc,-28*sc,32*sc,13*sc);
+    ctx.fillStyle='rgba(110,170,220,0.4)';ctx.fillRect(-12*sc,-26*sc,24*sc,10*sc);
+    ctx.fillStyle='rgba(255,240,180,0.9)';ctx.fillRect(20*sc,-10*sc,6*sc,4*sc);ctx.fillRect(20*sc,-5*sc,6*sc,4*sc);
+    ctx.fillStyle='rgba(255,20,20,0.85)';
+    ctx.beginPath();ctx.arc(-24*sc,-4*sc,3*sc,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(-24*sc,-9*sc,3*sc,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#0a0a0a';[[-18*sc,0],[18*sc,0]].forEach(([wx])=>{ctx.beginPath();ctx.arc(wx,0,5*sc,0,Math.PI*2);ctx.fill();});
+    ctx.restore();
+  }
+
+  function drawPlayer(dead) {
+    const px=W()*.5,py=H()*.72;
+    ctx.save();
+    if(dead){ctx.translate(px,py);ctx.rotate(Math.PI/2);ctx.translate(-px,-py);}
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath();ctx.ellipse(px,py+2,16,6,0,0,Math.PI*2);ctx.fill();
+    // Legs
+    ctx.fillStyle='#1a2a4a';ctx.fillRect(px-9,py,8,28);ctx.fillRect(px+1,py,8,28);
+    ctx.fillStyle='#111';ctx.fillRect(px-10,py+22,10,8);ctx.fillRect(px+1,py+22,10,8);
+    // Torso
+    ctx.fillStyle='#1a3a6a';ctx.fillRect(px-13,py-30,26,32);
+    ctx.fillStyle='#112211';ctx.fillRect(px-14,py-30,28,22);// vest
+    // Arms
+    ctx.fillStyle='#c8854a';ctx.fillRect(px-20,py-28,8,24);ctx.fillRect(px+12,py-28,8,24);
+    ctx.fillStyle='#111';ctx.fillRect(px-20,py-5,8,9);ctx.fillRect(px+12,py-5,8,9);// gloves
+    // Gun in right hand
+    if(!dead){ctx.fillStyle='#1a1a22';ctx.fillRect(px+17,py-18,16,5);
+      if(muzzleFlash>0){ctx.fillStyle=`rgba(255,200,60,${muzzleFlash*.9})`;ctx.beginPath();ctx.arc(px+33,py-16,6,0,Math.PI*2);ctx.fill();}}
+    // Head
+    ctx.fillStyle='#c8854a';ctx.fillRect(px-10,py-50,20,22);
+    ctx.fillStyle='#1e2e10';ctx.fillRect(px-11,py-56,22,18);// helmet
+    // Goggles
+    ctx.fillStyle='rgba(60,120,90,0.7)';ctx.fillRect(px-9,py-47,18,7);
+    ctx.restore();
+    // Death blood
+    if(dead){
+      ctx.fillStyle=`rgba(160,0,0,${bloodAlpha*.8})`;
+      ctx.beginPath();ctx.ellipse(px+20,py+5,18,8,0.3,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  function drawHelicopter(hx, hy) {
+    const x=hx*W(), y=hy*H();
+    ctx.save();ctx.translate(x,y);
+    ctx.fillStyle='#1a1e28';
+    ctx.fillRect(-30,-12,60,20);// body
+    ctx.fillRect(-8,-22,16,12);// cockpit top
+    ctx.fillStyle='rgba(80,180,255,0.5)';ctx.fillRect(-6,-20,12,10);// cockpit glass
+    // Tail
+    ctx.fillStyle='#1a1e28';ctx.fillRect(28,-8,20,5);
+    // Main rotor (spinning)
+    ctx.strokeStyle='rgba(180,190,200,0.85)';ctx.lineWidth=3;
+    const ra=t*.18;
+    for(let r=0;r<2;r++){
+      ctx.save();ctx.rotate(r*Math.PI/2+ra);
+      ctx.beginPath();ctx.moveTo(-40,0);ctx.lineTo(40,0);ctx.stroke();
+      ctx.restore();
+    }
+    // Tail rotor
+    ctx.strokeStyle='rgba(180,190,200,0.7)';ctx.lineWidth=2;
+    const ra2=t*.35;
+    ctx.save();ctx.translate(42,-5);
+    for(let r=0;r<2;r++){ctx.save();ctx.rotate(r*Math.PI/2+ra2);ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(8,0);ctx.stroke();ctx.restore();}
+    ctx.restore();
+    // Landing skids
+    ctx.strokeStyle='#888';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(-22,8);ctx.lineTo(-22,16);ctx.lineTo(22,16);ctx.lineTo(22,8);ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawSpotlight(hx, hy) {
+    if (!spotlightOn) return;
+    const hxp=hx*W(), hyp=hy*H();
+    const px=W()*.5, py=H()*.72;
+    const sg=ctx.createLinearGradient(hxp,hyp,px,py);
+    sg.addColorStop(0,'rgba(255,255,255,0.0)');
+    sg.addColorStop(0.6,'rgba(255,255,220,0.12)');
+    sg.addColorStop(1,'rgba(255,255,200,0.0)');
+    ctx.fillStyle=sg;
+    ctx.beginPath();ctx.moveTo(hxp,hyp);
+    ctx.lineTo(px-15,py);ctx.lineTo(px+15,py);ctx.closePath();ctx.fill();
+    // Ground pool
+    const gp=ctx.createRadialGradient(px,py,0,px,py,30);
+    gp.addColorStop(0,'rgba(255,255,220,0.35)');gp.addColorStop(1,'transparent');
+    ctx.fillStyle=gp;ctx.beginPath();ctx.arc(px,py,30,0,Math.PI*2);ctx.fill();
+  }
+
+  function drawEnemy(ry) {
+    // Enemy rappelling down rope from helicopter
+    const ex=helicopterX*W()+20, heliY=helicopterY*H();
+    const ey=Math.min(H()*.72, heliY + ry*(H()*.72-heliY));
+    // Rope
+    ctx.strokeStyle='rgba(180,170,150,0.7)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(ex,heliY+18);ctx.lineTo(ex,ey-30);ctx.stroke();
+    if(ry<1) return; // still descending
+    // Enemy standing
+    const epy=H()*.72;
+    ctx.save();ctx.translate(ex,epy);
+    ctx.fillStyle='#330000';ctx.fillRect(-9,0,7,26);ctx.fillRect(2,0,7,26);// legs
+    ctx.fillStyle='#111';ctx.fillRect(-10,22,9,7);ctx.fillRect(2,22,9,7);// boots
+    ctx.fillStyle='#661111';ctx.fillRect(-12,-28,24,30);// torso
+    ctx.fillStyle='#4a0a0a';ctx.fillRect(-13,-28,26,20);// vest
+    ctx.fillStyle='#cc3300';ctx.fillRect(-8,-48,18,20);// head
+    ctx.fillStyle='#330808';ctx.fillRect(-9,-54,20,16);// helmet
+    ctx.fillStyle='rgba(255,0,0,0.7)';ctx.fillRect(-7,-46,15,5);// red visor
+    // Gun
+    ctx.fillStyle='#111';ctx.fillRect(-22,-20,16,5);
+    if(muzzleFlash>0&&enemyLanded){
+      ctx.fillStyle=`rgba(255,200,60,${muzzleFlash*.9})`;
+      ctx.beginPath();ctx.arc(-22,-18,5,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function frame() {
+    if (_cinSkipped) return;
+    t++;
+    const shake = screenShake > 0 ? (Math.random()-0.5)*screenShake : 0;
+    ctx.save();
+    if(shake) ctx.translate(shake, shake*.4);
+
+    // Sky
+    const sky=ctx.createLinearGradient(0,0,0,H()*.66);
+    sky.addColorStop(0,'#050812');sky.addColorStop(0.4,'#0c1428');sky.addColorStop(0.7,'#1a1e28');
+    ctx.fillStyle=sky;ctx.fillRect(0,0,W(),H()*.66);
+    // Stars
+    if(t>10){
+      for(let s=0;s<80;s++){
+        const sx=((s*137.5)%1)*W(),sy=((s*91.3)%1)*H()*.5;
+        const sa=0.4+((s*17)%10)*.05;
+        ctx.fillStyle=`rgba(255,255,255,${sa})`;
+        ctx.beginPath();ctx.arc(sx,sy,0.5+((s*7)%10)*.1,0,Math.PI*2);ctx.fill();
+      }
+    }
+    // Moon
+    const mg=ctx.createRadialGradient(W()*.75,H()*.15,0,W()*.75,H()*.15,W()*.18);
+    mg.addColorStop(0,'rgba(200,210,240,0.22)');mg.addColorStop(1,'transparent');
+    ctx.fillStyle=mg;ctx.fillRect(0,0,W(),H());
+    ctx.fillStyle='rgba(230,235,210,0.88)';
+    ctx.beginPath();ctx.arc(W()*.75,H()*.15,W()*.02,0,Math.PI*2);ctx.fill();
+
+    // Buildings
+    buildings.forEach(b=>drawBuilding(b));
+    // Fog layer at building base
+    const fogG=ctx.createLinearGradient(0,H()*.60,0,H()*.70);
+    fogG.addColorStop(0,'transparent');fogG.addColorStop(1,'rgba(20,25,40,0.7)');
+    ctx.fillStyle=fogG;ctx.fillRect(0,H()*.60,W(),H()*.12);
+
+    // Road + street lights
+    drawRoad(); drawStreetLights();
+    cars.forEach(c=>drawCar(c));
+
+    // ── PHASE TIMELINE ──
+    // t 0–40:   City establishes, helicopter enters from left
+    // t 40–120: Helicopter flies over, spotlight activates
+    // t 120–200: Enemy rappels down
+    // t 200–260: Enemy shoots player
+    // t 260–320: Slow motion, player falls
+    // t 320–440: Screen fades black → REALM title
+    // t 440+:   Fade to home
+
+    // Helicopter movement
+    if (t < 60) {
+      helicopterX = -0.5 + (t / 60) * 1.0;
+    } else if (t < 120) {
+      helicopterX = 0.5 - ((t-60)/60)*0.1; // slow above player
+    }
+    helicopterY = 0.12 + Math.sin(t*0.04)*0.015;
+
+    if (t >= 55 && t < 80) {
+      spotlightOn = true;
+    }
+    if (t < 80) spotlightOn = t >= 55;
+
+    // Always draw spotlight if on
+    drawSpotlight(helicopterX, helicopterY);
+
+    // Enemy rope descent t=80–160
+    if (t >= 80 && t < 160) {
+      enemyRopeY = (t - 80) / 80;
+      if (enemyRopeY >= 1) enemyLanded = true;
+    }
+    if (t >= 80) drawEnemy(enemyRopeY);
+
+    // Player
+    const playerDead = t >= 260;
+    if (t >= 20) drawPlayer(playerDead);
+
+    // Enemy shoots at t=200
+    if (t >= 200 && t < 260 && enemyLanded) {
+      muzzleFlash = Math.max(0, 1 - (t-200)*0.05);
+      if (t === 220 || t === 232 || t === 245) { playSFX('shoot_pistol'); screenShake = 5; }
+    }
+    if (t >= 260) { muzzleFlash = 0; bloodAlpha = Math.min(1, (t-260)/30); }
+    muzzleFlash = Math.max(0, muzzleFlash - 0.04);
+    if (screenShake > 0) screenShake -= 0.3;
+
+    // Helicopter
+    drawHelicopter(helicopterX, helicopterY);
+
+    // Slow motion overlay t=240–280
+    if (t >= 240 && t < 280) {
+      ctx.fillStyle=`rgba(180,200,255,${((t-240)/40)*0.12})`;ctx.fillRect(0,0,W(),H());
+    }
+
+    // Screen flash at shooting
+    if (flashAlpha > 0) { ctx.fillStyle=`rgba(255,255,255,${flashAlpha})`; ctx.fillRect(0,0,W(),H()); flashAlpha -= 0.04; }
+    if (t===200){flashAlpha=0.4;}
+
+    // FADE TO BLACK
+    if (t >= 300) { fadeBlack = Math.min(1, (t-300)/40); ctx.fillStyle=`rgba(0,0,0,${fadeBlack})`; ctx.fillRect(0,0,W(),H()); }
+
+    // TITLE (t 360–480)
+    if (t >= 360 && t < 500) {
+      titleAlpha = t < 400 ? (t-360)/40 : (t > 470 ? 1-(t-470)/30 : 1);
+      subtitleAlpha = t > 390 ? Math.min(1,(t-390)/30) : 0;
+      ctx.save();ctx.globalAlpha=Math.max(0,titleAlpha);
+      // Smoke/fog behind title
+      const tfog=ctx.createRadialGradient(W()*.5,H()*.45,0,W()*.5,H()*.45,W()*.4);
+      tfog.addColorStop(0,'rgba(0,30,60,0.7)');tfog.addColorStop(1,'transparent');
+      ctx.fillStyle=tfog;ctx.fillRect(0,0,W(),H());
+      // Main title
+      ctx.shadowColor='rgba(0,180,255,0.95)';ctx.shadowBlur=50;
+      ctx.fillStyle='#ffffff';
+      ctx.font=`bold ${Math.floor(W()*.088)}px "Orbitron",monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('REALM', W()*.5, H()*.42);
+      ctx.shadowBlur=0;
+      // Metal lines
+      ctx.strokeStyle='rgba(0,200,255,0.5)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(W()*.2,H()*.49);ctx.lineTo(W()*.8,H()*.49);ctx.stroke();
+      // Subtitle
+      ctx.globalAlpha=Math.max(0,subtitleAlpha*titleAlpha);
+      ctx.fillStyle='rgba(0,200,255,0.9)';
+      ctx.font=`${Math.floor(W()*.018)}px "Orbitron",monospace`;
+      ctx.letterSpacing='0.35em';
+      ctx.fillText('URBAN BATTLEGROUND', W()*.5, H()*.55);
+      ctx.restore();
+    }
+
+    // Vignette
+    const vig=ctx.createRadialGradient(W()*.5,H()*.5,H()*.2,W()*.5,H()*.5,H()*.85);
+    vig.addColorStop(0,'transparent');vig.addColorStop(1,'rgba(0,0,0,0.7)');
+    ctx.fillStyle=vig;ctx.fillRect(0,0,W(),H());
+    // Scanlines
+    for(let sl=0;sl<H();sl+=3){ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(0,sl,W(),1);}
+
+    ctx.restore();
+    if (t >= 500) { skipIntro(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function skipIntro() {
+  _cinSkipped = true;
+  const cin = document.getElementById('cinematic');
+  cin.style.transition = 'opacity .7s ease';
+  cin.style.opacity = '0';
+  setTimeout(() => {
+    cin.classList.add('hidden');
+    cin.style.opacity = '';
+    showHomeScreen();
+  }, 700);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// HOME SCREEN
+// ─────────────────────────────────────────────────────────────────────
+let _homeBgRunning = false;
+function showHomeScreen() {
+  document.getElementById('homeScreen').classList.remove('hidden');
+  updateProfileUI();
+  if (!_homeBgRunning) { _homeBgRunning = true; runHomeBg(); }
+}
+
+function runHomeBg() {
+  const c = document.getElementById('homeBg'); if (!c) return;
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  const pts = Array.from({length:65},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.4+.3,vx:(Math.random()-.5)*.22,vy:-Math.random()*.3-.08,life:Math.random()}));
+  const buildings = Array.from({length:22},(_,i)=>({x:i*(c.width/19),w:38+Math.random()*72,h:85+Math.random()*225}));
+  function draw() {
+    if (!_homeBgRunning) return;
+    c.width = window.innerWidth; c.height = window.innerHeight;
+    const W=c.width,H=c.height;
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#020510');bg.addColorStop(.55,'#040c1a');bg.addColorStop(1,'#020510');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    // City silhouette + window glow
+    buildings.forEach(b=>{
+      ctx.fillStyle='rgba(12,17,32,0.95)';
+      ctx.fillRect(b.x,H*.72-b.h,b.w,b.h);
+      // Random windows
+      for(let w2=0;w2<6;w2++){
+        const wx=b.x+4+Math.random()*(b.w-10);
+        const wy=H*.72-b.h+6+Math.random()*(b.h-15);
+        if(Math.random()>.5){
+          ctx.fillStyle=`rgba(255,210,100,${0.3+Math.random()*.35})`;
+          ctx.fillRect(wx,wy,b.w*0.12,b.h*0.06);
+        }
+      }
+    });
+    // Grid
+    ctx.strokeStyle='rgba(0,200,255,0.035)';ctx.lineWidth=1;
+    for(let gx=0;gx<W;gx+=44){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(let gy=0;gy<H;gy+=44){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+    // Particles
+    pts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.life-=.0015;
+      if(p.life<=0||p.y<0){p.x=Math.random()*W;p.y=H;p.life=.65+Math.random()*.3;}
+      if(p.x<0||p.x>W)p.vx*=-1;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,200,255,${p.life*.42})`;ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// START GAME
+// ─────────────────────────────────────────────────────────────────────
+function startGame(mode) {
+  _homeBgRunning = false;
+  window._currentMode = mode;
+  window._lives = 2;
+  window._gameTime = 0;
+  window.currentPlayer.kills = 0;
+  window._PS.health = window._PS.maxHealth;
+  window._PS.armor  = 0;
+  window.currentPlayer.grenades = window.currentPlayer.grenades || 2;
+  window.currentPlayer.medkits  = window.currentPlayer.medkits  || 1;
+
+  ['homeScreen','multiMenu','matchCreated','shopScreen','settingsScreen','upgradeScreen'].forEach(id=>{
+    document.getElementById(id)?.classList.add('hidden');
+  });
+  const gc = document.getElementById('gameContainer');
+  gc.classList.remove('hidden');
+  document.getElementById('hudMode').textContent = mode.toUpperCase().replace('-',' ');
+  document.getElementById('hudTimer').textContent = mode==='solo' ? '∞' : '05:00';
+  document.getElementById('livesRow').innerHTML = '<span style="color:#ff4444;font-size:1rem">&#9632;</span><span style="color:#ff4444;font-size:1rem">&#9632;</span>';
+
+  // Cleanup
+  if (window._renderer) { try { window._renderer.dispose(); } catch(e){} }
+  window._enemies=[]; window._bystanders=[]; window._vehicles=[];
+  window._wallMeshes=[]; window._buildingBoxes=[];
+  window._pickups=[]; window._pickupMeshes=[];
+  document.querySelectorAll('.name-tag').forEach(el=>el.remove());
+  _camYaw=0; _camPitch=-0.18;
 
   initThreeJS();
-  buildCity(window._scene);
+  buildWorld(window._scene);
   createPlayer(window._scene);
 
-  if (mode === 'robots' || mode === 'two-player') {
-    spawnRobots(window._scene, mode === 'two-player' ? 2 : 6);
-  } else if (mode === 'solo') {
-    spawnRobots(window._scene, 4);
-  } else if (mode === 'multiplayer') {
-    spawnRobots(window._scene, 2);
-    joinMultiplayerMatch();
-  }
+  if (mode==='agents')      spawnEnemies(window._scene, 6);
+  else if (mode==='two-player') spawnEnemies(window._scene, 8);
+  else if (mode==='solo')   spawnEnemies(window._scene, 0);
+  else if (mode==='multiplayer') { spawnEnemies(window._scene, 3); startMPGame(); }
 
-  spawnBystanders(window._scene, 10);
+  spawnBystanders(window._scene, 12);
   spawnVehicles(window._scene);
-  equipWeapon(window.currentPlayer.equippedWeapon || 'pistol');
+  spawnPickups(window._scene);
+  equipWeapon(window.currentPlayer.equippedWeapon || 'assault');
 
-  window.gameRunning = true;
-  window.gamePaused = false;
-
-  startTimer();
-  updateHUD();
-  startGameLoop();
+  window.gameRunning=true; window.gamePaused=false;
+  if (mode!=='solo') startTimer(300);
+  updateHUD(); updateGearHUD(); updateAmmoHUD();
   setupControls();
-
-  // Add damage overlay
-  if (!document.getElementById('damageOverlay')) {
-    const overlay = document.createElement('div');
-    overlay.id = 'damageOverlay';
-    document.getElementById('gameContainer').appendChild(overlay);
-  }
+  startBGMusic();
+  window._lastT = performance.now();
+  gameLoop();
 }
 
-// ──────────────────────────────────────────────────
-// THREE.JS INIT
-// ──────────────────────────────────────────────────
+async function startMPGame() {
+  if (window._mpMatchKey) subscribeToMatch(window._mpMatchKey);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// THREE.JS INIT — cinematic night city rendering
+// ─────────────────────────────────────────────────────────────────────
 function initThreeJS() {
   const canvas = document.getElementById('gameCanvas');
-  const W = window.innerWidth, H = window.innerHeight;
+  const W=window.innerWidth, H=window.innerHeight;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0e1c);
-  scene.fog = new THREE.FogExp2(0x0a0e1c, 0.018);
   window._scene = scene;
 
-  const camera = new THREE.PerspectiveCamera(75, W / H, 0.1, 300);
-  camera.position.set(0, 1.6, 0.2);
-  camera._targetFOV = 75;
+  const camera = new THREE.PerspectiveCamera(70, W/H, 0.1, 300);
+  camera._targetFOV = 70;
   window._camera = camera;
 
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setSize(W, H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
   window._renderer = renderer;
 
-  // Lights
-  const ambient = new THREE.AmbientLight(0x1a2040, 0.6);
-  scene.add(ambient);
-
-  const sun = new THREE.DirectionalLight(0xffa060, 1.2);
-  sun.position.set(50, 80, 30);
-  sun.castShadow = true;
-  sun.shadow.mapSize.width = 2048;
-  sun.shadow.mapSize.height = 2048;
-  sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 200;
-  sun.shadow.camera.left = -80;
-  sun.shadow.camera.right = 80;
-  sun.shadow.camera.top = 80;
-  sun.shadow.camera.bottom = -80;
-  scene.add(sun);
-
-  const moonLight = new THREE.DirectionalLight(0x4060ff, 0.3);
-  moonLight.position.set(-30, 40, -20);
-  scene.add(moonLight);
-
   window.addEventListener('resize', () => {
-    const W = window.innerWidth, H = window.innerHeight;
-    camera.aspect = W / H;
+    camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(W, H);
+    renderer.setSize(window.innerWidth, window.innerHeight);
   });
 }
 
-// ──────────────────────────────────────────────────
-// BUILD CITY WORLD
-// ──────────────────────────────────────────────────
-function buildCity(scene) {
-  // Ground
-  const groundGeo = new THREE.PlaneGeometry(200, 200, 20, 20);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x1a1e2c });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+// ─────────────────────────────────────────────────────────────────────
+// CAMERA — smooth 3rd person behind player (matches screenshot exactly)
+// ─────────────────────────────────────────────────────────────────────
+function updateCamera(dt) {
+  const cam = window._camera; const pm = window._playerMesh;
+  if (!cam || !pm) return;
 
-  // Roads (cross pattern + diagonal)
-  addRoad(scene, 0, 0, 200, 8, true);   // main horizontal
-  addRoad(scene, 0, 0, 200, 8, false);  // main vertical
-  addRoad(scene, 30, 0, 200, 6, true);  // side road
-  addRoad(scene, -30, 0, 200, 6, false);
-  addRoad(scene, 0, 25, 80, 5, true);
+  // Smooth FOV
+  cam.fov += (cam._targetFOV - cam.fov) * 8 * dt;
+  cam.updateProjectionMatrix();
 
-  // City blocks — buildings
-  const cityLayout = [
-    // [x, z, w, h, d, color]
-    [20, 20, 12, 35, 10, 0x2a3050],   [20, -20, 10, 50, 8, 0x303545],
-    [-20, 20, 14, 28, 12, 0x252a40],  [-20, -20, 10, 60, 10, 0x2c3045],
-    [45, 15, 16, 22, 14, 0x1e2438],   [45, -15, 12, 40, 10, 0x28304a],
-    [-45, 15, 14, 30, 12, 0x232840],  [-45, -15, 10, 45, 8,  0x2a3050],
-    [70, 5, 18, 55, 15, 0x1c2035],    [-70, 5, 16, 42, 13, 0x242040],
-    [20, 50, 12, 20, 10, 0x2e3555],   [-20, 50, 10, 30, 8, 0x2a3048],
-    [50, -45, 14, 18, 12, 0x262c42],  [-50, -45, 16, 35, 14, 0x202038],
-    [0, 60, 20, 15, 15, 0x303050],    [35, -60, 12, 25, 10, 0x252a3c],
-  ];
+  if (window._inVehicle) return;
 
-  cityLayout.forEach(([x, z, w, h, d, color]) => {
-    addBuilding(scene, x, z, w, h, d, color);
-    window._buildingBounds.push({ x, z, w, d });
-  });
+  if (window._camMode === '3rd') {
+    // Camera offset: behind and above — slightly right when aiming (like GTA)
+    const dist   = window._isAiming ? 2.8 : 5.0;
+    const height = window._isAiming ? 1.8 : 2.5;
+    const lateral= window._isAiming ? 0.7 : 0.0;
 
-  // Gas station
-  addGasStation(scene, -55, -55);
+    // Build behind vector from camYaw
+    const cosY = Math.cos(_camYaw), sinY = Math.sin(_camYaw);
+    const behind = new THREE.Vector3(sinY * lateral + cosY * lateral * 0.3, height, cosY * dist + sinY * dist * 0.15);
+    // Wait — just use camera yaw properly:
+    const behindDir = new THREE.Vector3(
+      Math.sin(_camYaw) * lateral + Math.sin(_camYaw + Math.PI) * (dist - lateral * 0.5),
+      height,
+      Math.cos(_camYaw) * lateral + Math.cos(_camYaw + Math.PI) * (dist - lateral * 0.5)
+    ).normalize().multiplyScalar(dist);
+    behindDir.y = height;
 
-  // Abandoned factory
-  addFactory(scene, 60, -60);
+    const targetCamPos = pm.position.clone().add(new THREE.Vector3(
+      Math.sin(_camYaw + Math.PI) * dist + Math.sin(_camYaw + Math.PI/2) * lateral,
+      height,
+      Math.cos(_camYaw + Math.PI) * dist + Math.cos(_camYaw + Math.PI/2) * lateral
+    ));
 
-  // Bridge
-  addBridge(scene, 0, -80, 200, 6);
+    // Smooth follow
+    cam.position.lerp(targetCamPos, 10 * dt);
 
-  // Signboards
-  addSignboard(scene, 15, 20, 'BELLA FOODS', 0xff8040);
-  addSignboard(scene, -18, -22, 'BELLA MARKET', 0x40cc40);
-  addSignboard(scene, 42, 18, 'BELLA TELECOM', 0x4080ff);
-  addSignboard(scene, -42, -18, 'FOOD & DRINKS', 0xffcc20);
-  addSignboard(scene, 68, 8, 'REALM TOWER', 0x00c8ff);
+    // Look at player chest level
+    const lookTarget = pm.position.clone().add(new THREE.Vector3(0, 1.3, 0));
+    cam.lookAt(lookTarget);
 
-  // Street lights
-  for (let i = -5; i <= 5; i++) {
-    addStreetLight(scene, i * 18, 5);
-    addStreetLight(scene, i * 18, -5);
-    addStreetLight(scene, 5, i * 18);
-    addStreetLight(scene, -5, i * 18);
-  }
+    // Face player in direction of movement
+    pm.rotation.y = _camYaw;
 
-  // Fences / barriers
-  for (let i = -3; i <= 3; i++) {
-    addBarrier(scene, i * 15 + 7, 8);
-    addBarrier(scene, i * 15 + 7, -8);
-  }
-
-  // Ground texture grid lines
-  const lineGeo = new THREE.PlaneGeometry(200, 200);
-  const lineMat = new THREE.MeshBasicMaterial({
-    color: 0x222840, transparent: true, opacity: 0.4,
-    wireframe: false,
-  });
-  // Road markings
-  addRoadMarkings(scene);
-
-  // Sky particles (city lights/stars)
-  addCityAtmosphere(scene);
-}
-
-function addRoad(scene, cx, cz, len, width, isX) {
-  const geo = new THREE.PlaneGeometry(isX ? len : width, isX ? width : len);
-  const mat = new THREE.MeshLambertMaterial({ color: 0x131825 });
-  const road = new THREE.Mesh(geo, mat);
-  road.rotation.x = -Math.PI / 2;
-  road.position.set(cx, 0.01, cz);
-  road.receiveShadow = true;
-  scene.add(road);
-
-  // Yellow line
-  const lineGeo = new THREE.PlaneGeometry(isX ? len : 0.15, isX ? 0.15 : len);
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xddaa00, transparent: true, opacity: 0.7 });
-  const line = new THREE.Mesh(lineGeo, lineMat);
-  line.rotation.x = -Math.PI / 2;
-  line.position.set(cx, 0.02, cz);
-  scene.add(line);
-}
-
-function addRoadMarkings(scene) {
-  // White dashed lines along roads
-  for (let i = -10; i <= 10; i++) {
-    if (Math.abs(i) > 1) {
-      const dash = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.2, 3),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })
-      );
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(i * 8, 0.015, 0);
-      scene.add(dash);
-    }
+  } else {
+    // First person: camera = head position
+    cam.position.copy(pm.position).add(new THREE.Vector3(0, 1.56, 0));
+    cam.rotation.order = 'YXZ';
+    cam.rotation.y = _camYaw;
+    cam.rotation.x = _camPitch;
+    pm.visible = false;
   }
 }
 
-function addBuilding(scene, x, z, w, h, d, color) {
-  // Main structure
-  const geo = new THREE.BoxGeometry(w, h, d);
-  const mat = new THREE.MeshLambertMaterial({ color });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, h / 2, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  window._wallMeshes.push(mesh);
-
-  // Windows grid
-  const winCols = Math.floor(w / 2.5);
-  const winRows = Math.floor(h / 3.5);
-  for (let r = 0; r < winRows; r++) {
-    for (let c = 0; c < winCols; c++) {
-      const lit = Math.random() > 0.35;
-      if (!lit) continue;
-      const winColor = Math.random() > 0.3 ? 0xffffaa : 0xaaccff;
-      const win = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.2, 1.8),
-        new THREE.MeshBasicMaterial({ color: winColor, transparent: true, opacity: 0.6 + Math.random() * 0.3 })
-      );
-      const wx = x - w/2 + (c + 0.5) * (w / winCols) + 0.3;
-      const wy = 2 + r * 3.5;
-      win.position.set(wx, wy, z + d/2 + 0.01);
-      scene.add(win);
-
-      // Window light glow
-      if (Math.random() > 0.7) {
-        const light = new THREE.PointLight(winColor, 0.3, 8);
-        light.position.set(wx, wy, z + d/2 + 0.5);
-        scene.add(light);
-      }
-    }
-  }
-
-  // Rooftop details
-  const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(w * 0.9, 0.5, d * 0.9),
-    new THREE.MeshLambertMaterial({ color: color + 0x050505 })
-  );
-  roof.position.set(x, h + 0.25, z);
-  roof.castShadow = true;
-  scene.add(roof);
-
-  // Rooftop antenna
-  if (Math.random() > 0.5) {
-    const ant = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.05, 3),
-      new THREE.MeshLambertMaterial({ color: 0x888888 })
-    );
-    ant.position.set(x + Math.random() * 2 - 1, h + 2, z + Math.random() * 2 - 1);
-    scene.add(ant);
-  }
-}
-
-function addGasStation(scene, x, z) {
-  // Base
-  const base = new THREE.Mesh(
-    new THREE.BoxGeometry(16, 0.2, 12),
-    new THREE.MeshLambertMaterial({ color: 0x1a2030 })
-  );
-  base.position.set(x, 0.1, z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  // Canopy
-  const canopy = new THREE.Mesh(
-    new THREE.BoxGeometry(14, 0.3, 10),
-    new THREE.MeshLambertMaterial({ color: 0xff4422 })
-  );
-  canopy.position.set(x, 5, z);
-  scene.add(canopy);
-
-  // Pumps
-  [[-3, 0], [0, 0], [3, 0]].forEach(([ox, oz]) => {
-    const pump = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 2, 0.6),
-      new THREE.MeshLambertMaterial({ color: 0x336688 })
-    );
-    pump.position.set(x + ox, 1, z + oz);
-    pump.castShadow = true;
-    scene.add(pump);
-  });
-
-  // Canopy supports
-  [[-5, -4], [5, -4], [-5, 4], [5, 4]].forEach(([ox, oz]) => {
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.1, 5),
-      new THREE.MeshLambertMaterial({ color: 0x888888 })
-    );
-    post.position.set(x + ox, 2.5, z + oz);
-    scene.add(post);
-  });
-
-  addSignboard(scene, x + 8, z - 5, 'GAS STATION', 0xff6600);
-}
-
-function addFactory(scene, x, z) {
-  // Main hall
-  const hall = new THREE.Mesh(
-    new THREE.BoxGeometry(30, 15, 20),
-    new THREE.MeshLambertMaterial({ color: 0x2a2220 })
-  );
-  hall.position.set(x, 7.5, z);
-  hall.castShadow = true;
-  scene.add(hall);
-  window._wallMeshes.push(hall);
-
-  // Chimney stacks
-  [[-10, -5], [10, -5]].forEach(([ox, oz]) => {
-    const chimney = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.8, 1, 20),
-      new THREE.MeshLambertMaterial({ color: 0x3a3030 })
-    );
-    chimney.position.set(x + ox, 10, z + oz);
-    chimney.castShadow = true;
-    scene.add(chimney);
-
-    // Red light on chimney
-    const light = new THREE.PointLight(0xff2200, 1.5, 15);
-    light.position.set(x + ox, 21, z + oz);
-    scene.add(light);
-  });
-
-  addSignboard(scene, x + 16, z, 'ABANDONED', 0x888888);
-}
-
-function addBridge(scene, x, z, len, w) {
-  const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(len, 0.5, w),
-    new THREE.MeshLambertMaterial({ color: 0x2a3550 })
-  );
-  deck.position.set(x, 3, z);
-  deck.castShadow = true;
-  scene.add(deck);
-
-  // Railings
-  for (let i = -10; i <= 10; i++) {
-    [-(w/2 - 0.3), (w/2 - 0.3)].forEach(rz => {
-      const post = new THREE.Mesh(
-        new THREE.BoxGeometry(0.15, 1.2, 0.15),
-        new THREE.MeshLambertMaterial({ color: 0x888888 })
-      );
-      post.position.set(x + i * 9, 4, z + rz);
-      scene.add(post);
-    });
-  }
-}
-
-function addStreetLight(scene, x, z) {
-  const post = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08, 0.1, 6, 6),
-    new THREE.MeshLambertMaterial({ color: 0x666666 })
-  );
-  post.position.set(x, 3, z);
-  post.castShadow = true;
-  scene.add(post);
-
-  const arm = new THREE.Mesh(
-    new THREE.BoxGeometry(1.5, 0.1, 0.1),
-    new THREE.MeshLambertMaterial({ color: 0x666666 })
-  );
-  arm.position.set(x + 0.7, 6.1, z);
-  scene.add(arm);
-
-  const lamp = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2, 6, 6),
-    new THREE.MeshBasicMaterial({ color: 0xffffcc })
-  );
-  lamp.position.set(x + 1.3, 6, z);
-  scene.add(lamp);
-
-  const light = new THREE.PointLight(0xffe8a0, 1.2, 18);
-  light.position.set(x + 1.3, 5.8, z);
-  scene.add(light);
-}
-
-function addBarrier(scene, x, z) {
-  const bar = new THREE.Mesh(
-    new THREE.BoxGeometry(3.5, 0.9, 0.5),
-    new THREE.MeshLambertMaterial({ color: 0xee6622 })
-  );
-  bar.position.set(x, 0.45, z);
-  bar.castShadow = true;
-  scene.add(bar);
-  window._wallMeshes.push(bar);
-
-  // White stripes
-  for (let i = 0; i < 4; i++) {
-    const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 0.91, 0.51),
-      new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xffffff : 0xee6622 })
-    );
-    stripe.position.set(x - 1.5 + i * 1, 0.45, z);
-    scene.add(stripe);
-  }
-}
-
-function addSignboard(scene, x, z, text, color) {
-  const board = new THREE.Mesh(
-    new THREE.BoxGeometry(6, 2, 0.2),
-    new THREE.MeshLambertMaterial({ color: 0x1a1a2a })
-  );
-  const post = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.1, 4),
-    new THREE.MeshLambertMaterial({ color: 0x888888 })
-  );
-  post.position.set(x, 2, z);
-  board.position.set(x, 4.2, z);
-  scene.add(post);
-  scene.add(board);
-
-  // Color strip
-  const strip = new THREE.Mesh(
-    new THREE.BoxGeometry(6, 0.3, 0.21),
-    new THREE.MeshBasicMaterial({ color })
-  );
-  strip.position.set(x, 3.3, z);
-  scene.add(strip);
-
-  // Light from board
-  const light = new THREE.PointLight(color, 0.5, 10);
-  light.position.set(x, 4.5, z + 0.5);
-  scene.add(light);
-}
-
-function addCityAtmosphere(scene) {
-  // Stars
-  const starGeo = new THREE.BufferGeometry();
-  const starCount = 800;
-  const positions = new Float32Array(starCount * 3);
-  for (let i = 0; i < starCount; i++) {
-    positions[i*3]   = (Math.random() - 0.5) * 400;
-    positions[i*3+1] = 40 + Math.random() * 100;
-    positions[i*3+2] = (Math.random() - 0.5) * 400;
-  }
-  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, transparent: true, opacity: 0.6 });
-  scene.add(new THREE.Points(starGeo, starMat));
-
-  // Moon
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(3, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xeeeebb })
-  );
-  moon.position.set(-80, 80, -120);
-  scene.add(moon);
-  const moonGlow = new THREE.PointLight(0xbbccff, 0.8, 150);
-  moonGlow.position.copy(moon.position);
-  scene.add(moonGlow);
-}
-
-// ──────────────────────────────────────────────────
-// CONTROLS (Mouse / Touch)
-// ──────────────────────────────────────────────────
-let _mouseX = 0, _mouseY = 0;
-let _pointerLocked = false;
-
+// ─────────────────────────────────────────────────────────────────────
+// CONTROLS
+// ─────────────────────────────────────────────────────────────────────
 function setupControls() {
   const canvas = document.getElementById('gameCanvas');
-
-  // Pointer lock (desktop aiming)
-  canvas.addEventListener('click', () => {
-    canvas.requestPointerLock?.();
-  });
+  canvas.addEventListener('click', () => { canvas.requestPointerLock?.(); });
   document.addEventListener('pointerlockchange', () => {
     _pointerLocked = document.pointerLockElement === canvas;
   });
 
-  document.addEventListener('mousemove', (e) => {
-    if (!_pointerLocked || !window.gameRunning || window.gamePaused) return;
-    const sens = 0.002;
-    if (window._camera) {
-      window._camera.rotation.y -= e.movementX * sens;
-      window._camera.rotation.x = Math.max(
-        -Math.PI / 3,
-        Math.min(Math.PI / 3, window._camera.rotation.x - e.movementY * sens)
-      );
+  // Mouse look
+  document.addEventListener('mousemove', e => {
+    if (!window.gameRunning || window.gamePaused) return;
+    if (_pointerLocked) {
+      _camYaw   -= e.movementX * 0.0022;
+      _camPitch  = Math.max(-1.1, Math.min(0.35, _camPitch - e.movementY * 0.0022));
     }
   });
 
-  // Touch look (right side)
-  let _touchLookId = null, _touchLookX = 0, _touchLookY = 0;
-  const rightZone = document.getElementById('gameContainer');
-  rightZone.addEventListener('touchstart', (e) => {
-    Array.from(e.changedTouches).forEach(t => {
-      if (t.clientX > window.innerWidth * 0.45) {
-        _touchLookId = t.identifier;
-        _touchLookX = t.clientX;
-        _touchLookY = t.clientY;
+  // Touch look (right half — NOT interfering with joystick)
+  let _tlId = null, _tlX = 0, _tlY = 0;
+  const gc = document.getElementById('gameContainer');
+  gc.addEventListener('touchstart', e => {
+    Array.from(e.changedTouches).forEach(touch => {
+      const rightHalf = touch.clientX > window.innerWidth * 0.42;
+      const notControl = !document.getElementById('mobileControls')?.contains(e.target) &&
+                         !document.getElementById('driveControls')?.contains(e.target);
+      if (rightHalf && notControl && _tlId === null) {
+        _tlId = touch.identifier; _tlX = touch.clientX; _tlY = touch.clientY;
       }
     });
   }, { passive: true });
-
-  rightZone.addEventListener('touchmove', (e) => {
-    Array.from(e.changedTouches).forEach(t => {
-      if (t.identifier === _touchLookId && window._camera) {
-        const dx = t.clientX - _touchLookX;
-        const dy = t.clientY - _touchLookY;
-        window._camera.rotation.y -= dx * 0.004;
-        window._camera.rotation.x = Math.max(
-          -Math.PI / 2.5,
-          Math.min(Math.PI / 2.5, window._camera.rotation.x - dy * 0.004)
-        );
-        _touchLookX = t.clientX;
-        _touchLookY = t.clientY;
-      }
+  gc.addEventListener('touchmove', e => {
+    Array.from(e.changedTouches).forEach(touch => {
+      if (touch.identifier !== _tlId) return;
+      const dx = touch.clientX - _tlX, dy = touch.clientY - _tlY;
+      _camYaw   -= dx * 0.0038;
+      _camPitch  = Math.max(-1.1, Math.min(0.35, _camPitch - dy * 0.0038));
+      _tlX = touch.clientX; _tlY = touch.clientY;
     });
+  }, { passive: true });
+  gc.addEventListener('touchend', e => {
+    Array.from(e.changedTouches).forEach(t => { if (t.identifier === _tlId) _tlId = null; });
   }, { passive: true });
 
   // Joystick
   initJoystick();
 
   // Keyboard
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keydown', e => {
     if (!window.gameRunning) return;
     const k = e.key.toLowerCase();
-    if (k === 'w' || k === 'arrowup') window._moveKeys.w = true;
-    if (k === 'a' || k === 'arrowleft') window._moveKeys.a = true;
-    if (k === 's' || k === 'arrowdown') window._moveKeys.s = true;
-    if (k === 'd' || k === 'arrowright') window._moveKeys.d = true;
-    if (k === ' ') { e.preventDefault(); startAction('jump'); }
-    if (k === 'c') startAction('crouch');
-    if (k === 'r') reloadWeapon();
-    if (k === 'f') toggleVehicle();
-    if (k === 'escape') pauseGame();
-    if (k === 'b') openInGameShop();
-    if (k === 'shift') startAction('dash');
-    if (k === 'mousedown' || k === 'z') startShooting();
-    if (k === 'rightclick' || k === 'q') startAiming();
+    if (k==='w'||k==='arrowup')    window._keys.w=true;
+    if (k==='s'||k==='arrowdown')  window._keys.s=true;
+    if (k==='a'||k==='arrowleft')  window._keys.a=true;
+    if (k==='d'||k==='arrowright') window._keys.d=true;
+    if (k===' ') { e.preventDefault(); doJump(); }
+    if (k==='c') startCrouch();
+    if (k==='r') doReload();
+    if (k==='f') toggleVehicle();
+    if (k==='g') doGrenade();
+    if (k==='h') doHeal();
+    if (k==='v') toggleCameraMode();
+    if (k==='b') openInGameShop();
+    if (k==='escape') pauseGame();
+    if (k==='shift') doDash();
   });
-
-  document.addEventListener('keyup', (e) => {
+  document.addEventListener('keyup', e => {
     const k = e.key.toLowerCase();
-    if (k === 'w' || k === 'arrowup') window._moveKeys.w = false;
-    if (k === 'a' || k === 'arrowleft') window._moveKeys.a = false;
-    if (k === 's' || k === 'arrowdown') window._moveKeys.s = false;
-    if (k === 'd' || k === 'arrowright') window._moveKeys.d = false;
-    if (k === 'c') endAction('crouch');
-    if (k === 'q') stopAiming();
-    if (k === 'z') stopShooting();
+    if (k==='w'||k==='arrowup')    window._keys.w=false;
+    if (k==='s'||k==='arrowdown')  window._keys.s=false;
+    if (k==='a'||k==='arrowleft')  window._keys.a=false;
+    if (k==='d'||k==='arrowright') window._keys.d=false;
+    if (k==='c') stopCrouch();
+    if (k==='q') stopAiming();
   });
 
-  // Mouse click = shoot
-  canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && window.gameRunning && !window.gamePaused) startShooting();
-    if (e.button === 2) startAiming();
+  // Mouse fire
+  canvas.addEventListener('mousedown', e => {
+    if (e.button===0 && window.gameRunning && !window.gamePaused) startFiring();
+    if (e.button===2) startAiming();
   });
-  canvas.addEventListener('mouseup', (e) => {
-    if (e.button === 0) stopShooting();
-    if (e.button === 2) stopAiming();
+  canvas.addEventListener('mouseup', e => {
+    if (e.button===0) stopFiring();
+    if (e.button===2) stopAiming();
   });
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 function initJoystick() {
-  const base = document.querySelector('.joystick-base');
-  const knob = document.getElementById('joystickKnob');
+  const base = document.getElementById('joyBase');
+  const knob = document.getElementById('joyKnob');
   if (!base || !knob) return;
-
-  let active = false, startX = 0, startY = 0;
-  const MAX_R = 28;
-
-  base.addEventListener('touchstart', (e) => {
-    active = true;
-    const t = e.changedTouches[0];
-    const rect = base.getBoundingClientRect();
-    startX = rect.left + rect.width / 2;
-    startY = rect.top + rect.height / 2;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', (e) => {
+  let active=false, cx=0, cy=0; const MAX=30;
+  base.addEventListener('touchstart', e => {
+    active=true;
+    const r=base.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2;
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchmove', e => {
     if (!active) return;
-    const t = Array.from(e.touches).find(t => {
-      const dx = t.clientX - startX, dy = t.clientY - startY;
-      return Math.sqrt(dx*dx + dy*dy) < 80;
+    const touch = [...e.touches].find(t => {
+      const dx=t.clientX-cx, dy=t.clientY-cy; return Math.sqrt(dx*dx+dy*dy) < 90;
     });
-    if (!t) return;
-    let dx = t.clientX - startX;
-    let dy = t.clientY - startY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist > MAX_R) { dx = dx/dist*MAX_R; dy = dy/dist*MAX_R; }
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    window._joystickDelta.x = dx / MAX_R;
-    window._joystickDelta.y = -dy / MAX_R;
+    if (!touch) return;
+    let dx=touch.clientX-cx, dy=touch.clientY-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy); if(dist>MAX){dx=dx/dist*MAX;dy=dy/dist*MAX;}
+    knob.style.transform=`translate(${dx}px,${dy}px)`;
+    window._joy.x=dx/MAX; window._joy.y=-dy/MAX;
   }, { passive: true });
-
   document.addEventListener('touchend', () => {
-    active = false;
-    knob.style.transform = '';
-    window._joystickDelta.x = 0;
-    window._joystickDelta.y = 0;
+    if (!active) return; active=false;
+    knob.style.transform=''; window._joy.x=0; window._joy.y=0;
   });
 }
 
-// ──────────────────────────────────────────────────
-// GAME LOOP
-// ──────────────────────────────────────────────────
-let _lastTime = 0;
-
-function startGameLoop() {
-  _lastTime = performance.now();
-  requestAnimationFrame(gameLoop);
+function toggleCameraMode() {
+  if (window._camMode==='3rd') {
+    window._camMode='1st';
+    if (window._playerMesh) window._playerMesh.visible=false;
+    document.getElementById('camBtn').textContent='1P';
+  } else {
+    window._camMode='3rd';
+    if (window._playerMesh) window._playerMesh.visible=true;
+    document.getElementById('camBtn').textContent='3P';
+  }
 }
 
-function gameLoop(now) {
+// ─────────────────────────────────────────────────────────────────────
+// GAME LOOP
+// ─────────────────────────────────────────────────────────────────────
+window._lastT = 0;
+function gameLoop() {
   if (!window.gameRunning) return;
-  requestAnimationFrame(gameLoop);
-
-  const dt = Math.min((now - _lastTime) / 1000, 0.05);
-  _lastTime = now;
-
-  if (window.gamePaused) return;
-
-  // Update player
-  updatePlayerMovement(dt, window._camera);
-
-  // Update vehicle
-  if (window._inVehicle) updateVehicle(dt);
-
-  // FOV smooth zoom
-  if (window._camera) {
-    const target = window._camera._targetFOV || 75;
-    window._camera.fov += (target - window._camera.fov) * 8 * dt;
-    window._camera.updateProjectionMatrix();
-  }
-
-  // Update robots
-  (window._enemies || []).forEach(robot => updateRobotAI(robot, dt));
-
-  // Update bystanders
-  (window._bystanders || []).forEach(b => updateBystander(b, dt));
-
-  // Multiplayer tick
-  tickMultiplayer(dt);
-
-  // Draw minimap
-  drawMinimap();
-
-  // Update name tags
-  updateNameTags(window._camera, window._renderer);
-
-  // Render
-  window._renderer.render(window._scene, window._camera);
+  requestAnimationFrame(ts => {
+    const dt = Math.min((ts - window._lastT) / 1000, 0.05);
+    window._lastT = ts;
+    if (!window.gamePaused) {
+      window._gameTime += dt;
+      if (!window._inVehicle) updatePlayerMovement(dt, window._camera);
+      updateCamera(dt);
+      if (window._inVehicle) updateDriving(dt);
+      (window._enemies  || []).forEach(e => updateEnemyAI(e, dt));
+      (window._bystanders || []).forEach(b => updateBystander(b, dt));
+      (window._vehicles || []).filter(v => !v.occupied).forEach(v => updateVehicleAI(v, dt));
+      updatePickups(dt);
+      tickMP(dt);
+      animateWorld(window._gameTime);
+      drawMinimap();
+      updateAllNameTags(window._camera, window._renderer);
+    }
+    if (window._renderer && window._scene && window._camera) {
+      window._renderer.render(window._scene, window._camera);
+    }
+    gameLoop();
+  });
 }

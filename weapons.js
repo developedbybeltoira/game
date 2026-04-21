@@ -1,371 +1,192 @@
-// ══════════════════════════════════════════════════
-//  weapons.js — Weapon Definitions & Combat System
-// ══════════════════════════════════════════════════
-
+// weapons.js — Weapon defs, gun models, firing system
 window.WEAPONS = {
-  pistol: {
-    id: 'pistol', name: 'G17 PISTOL',
-    damage: 25, fireRate: 300, range: 40,
-    ammo: 15, maxAmmo: 15, reserve: 60,
-    reloadTime: 1200,
-    recoil: 2, spread: 0.04,
-    automatic: false, price: 0,
-    dmgStat: 3, speedStat: 9, rangeStat: 4, accStat: 7,
-    color: '#aaaaaa',
-    svgPath: `<rect x="5" y="14" width="28" height="10" rx="2" fill="#888"/>
-              <rect x="25" y="10" width="12" height="6" rx="1" fill="#777"/>
-              <rect x="8" y="20" width="6" height="6" rx="1" fill="#666"/>`,
-  },
-  smg: {
-    id: 'smg', name: 'MP5 SMG',
-    damage: 18, fireRate: 100, range: 35,
-    ammo: 30, maxAmmo: 30, reserve: 120,
-    reloadTime: 1400,
-    recoil: 3, spread: 0.06,
-    automatic: true, price: 300,
-    dmgStat: 4, speedStat: 8, rangeStat: 4, accStat: 6,
-    color: '#00c8ff',
-    svgPath: `<rect x="2" y="13" width="36" height="8" rx="1" fill="#555"/>
-              <rect x="20" y="9" width="16" height="5" rx="1" fill="#666"/>
-              <rect x="14" y="20" width="5" height="8" rx="1" fill="#444"/>
-              <rect x="2" y="15" width="10" height="2" fill="#333"/>`,
-  },
-  assault: {
-    id: 'assault', name: 'M4A1 RIFLE',
-    damage: 35, fireRate: 120, range: 80,
-    ammo: 30, maxAmmo: 30, reserve: 90,
-    reloadTime: 1800,
-    recoil: 4, spread: 0.03,
-    automatic: true, price: 600,
-    dmgStat: 7, speedStat: 6, rangeStat: 7, accStat: 7,
-    color: '#00ff88',
-    svgPath: `<rect x="2" y="14" width="38" height="7" rx="1" fill="#444"/>
-              <rect x="22" y="10" width="16" height="5" rx="1" fill="#555"/>
-              <rect x="16" y="20" width="6" height="9" rx="1" fill="#333"/>
-              <rect x="28" y="10" width="12" height="2" fill="#666"/>
-              <rect x="2" y="15" width="14" height="2" fill="#333"/>`,
-  },
-  sniper: {
-    id: 'sniper', name: 'AWP SNIPER',
-    damage: 95, fireRate: 1500, range: 200,
-    ammo: 5, maxAmmo: 5, reserve: 20,
-    reloadTime: 2800,
-    recoil: 12, spread: 0.001,
-    automatic: false, price: 900,
-    dmgStat: 10, speedStat: 2, rangeStat: 10, accStat: 10,
-    color: '#ff3c5f',
-    svgPath: `<rect x="1" y="15" width="42" height="6" rx="1" fill="#3a3a4a"/>
-              <rect x="26" y="11" width="14" height="4" rx="1" fill="#4a4a5a"/>
-              <rect x="18" y="20" width="5" height="9" rx="1" fill="#2a2a3a"/>
-              <circle cx="34" cy="13" r="3" fill="#333" stroke="#00c8ff" stroke-width="1"/>
-              <rect x="1" y="16" width="18" height="2" fill="#222"/>`,
-  },
-  shotgun: {
-    id: 'shotgun', name: 'SPAS-12',
-    damage: 70, fireRate: 700, range: 25,
-    ammo: 8, maxAmmo: 8, reserve: 32,
-    reloadTime: 2200,
-    recoil: 10, spread: 0.12,
-    automatic: false, price: 500,
-    dmgStat: 9, speedStat: 4, rangeStat: 2, accStat: 4,
-    color: '#f0c040',
-    svgPath: `<rect x="2" y="13" width="34" height="10" rx="1" fill="#5a3a20"/>
-              <rect x="22" y="10" width="12" height="4" rx="1" fill="#6a4a30"/>
-              <rect x="12" y="22" width="12" height="2" fill="#8b6040"/>
-              <rect x="34" y="14" width="4" height="6" rx="1" fill="#444"/>`,
-  },
-  rocket: {
-    id: 'rocket', name: 'RPG-7',
-    damage: 200, fireRate: 2000, range: 120,
-    ammo: 1, maxAmmo: 1, reserve: 4,
-    reloadTime: 3000,
-    recoil: 20, spread: 0.02,
-    automatic: false, price: 1500,
-    dmgStat: 10, speedStat: 1, rangeStat: 8, accStat: 5,
-    color: '#ff8040',
-    svgPath: `<rect x="2" y="16" width="30" height="5" rx="10" fill="#5a5a2a"/>
-              <rect x="28" y="14" width="12" height="9" rx="1" fill="#4a4a1a"/>
-              <polygon points="2,16 2,21 -4,18.5" fill="#888"/>`,
-  },
+  pistol:  { id:'pistol',  name:'GLOCK 17',  cat:'pistol', dmg:30, rate:320, range:45, ammo:15, res:60,  reload:1100, recoil:2.5, spread:.04, auto:false, price:0,    ds:3,ss:9,rs:4,as:7, sfx:'shoot_pistol', col:'#aaaaaa' },
+  usp:     { id:'usp',     name:'USP-S',     cat:'pistol', dmg:40, rate:400, range:55, ammo:12, res:48,  reload:1300, recoil:3,   spread:.03, auto:false, price:400,  ds:5,ss:8,rs:5,as:8, sfx:'shoot_pistol', col:'#888888' },
+  deagle:  { id:'deagle',  name:'DESERT EAGLE', cat:'pistol', dmg:75, rate:700, range:60, ammo:7, res:28, reload:1500, recoil:8,   spread:.02, auto:false, price:700,  ds:8,ss:5,rs:6,as:8, sfx:'shoot_pistol', col:'#996633' },
+  smg:     { id:'smg',     name:'MP5 SMG',   cat:'rifle',  dmg:20, rate:100, range:40, ammo:30, res:120, reload:1400, recoil:3,   spread:.06, auto:true,  price:400,  ds:4,ss:8,rs:4,as:6, sfx:'shoot_rifle', col:'#00c8ff' },
+  assault: { id:'assault', name:'M4A1',      cat:'rifle',  dmg:35, rate:110, range:85, ammo:30, res:90,  reload:1800, recoil:4,   spread:.03, auto:true,  price:700,  ds:7,ss:6,rs:8,as:7, sfx:'shoot_rifle', col:'#00ff88' },
+  ak47:    { id:'ak47',    name:'AK-47',     cat:'rifle',  dmg:45, rate:130, range:80, ammo:30, res:90,  reload:1900, recoil:6,   spread:.04, auto:true,  price:800,  ds:8,ss:5,rs:7,as:6, sfx:'shoot_rifle', col:'#cc8040' },
+  sniper:  { id:'sniper',  name:'AWM',       cat:'rifle',  dmg:100,rate:1600,range:220,ammo:5,  res:20,  reload:2800, recoil:14,  spread:.001,auto:false, price:1200, ds:10,ss:2,rs:10,as:10,sfx:'shoot_sniper',col:'#ff3c5f' },
+  shotgun: { id:'shotgun', name:'SPAS-12',   cat:'heavy',  dmg:80, rate:750, range:22, ammo:8,  res:32,  reload:2200, recoil:11,  spread:.14, auto:false, price:600,  ds:9,ss:4,rs:2,as:4,  sfx:'shoot_shotgun',col:'#f0c040' },
+  rpg:     { id:'rpg',     name:'RPG-7',     cat:'heavy',  dmg:220,rate:2500,range:140,ammo:1,  res:4,   reload:3200, recoil:22,  spread:.02, auto:false, price:1800, ds:10,ss:1,rs:8,as:5, sfx:'explosion',   col:'#ff8040' },
+  minigun: { id:'minigun', name:'MINIGUN',   cat:'heavy',  dmg:25, rate:70,  range:65, ammo:200,res:400, reload:4000, recoil:5,   spread:.09, auto:true,  price:2500, ds:8,ss:5,rs:5,as:5,  sfx:'shoot_rifle', col:'#ff6020' },
+  grenade_launcher:{ id:'grenade_launcher',name:'M79',cat:'heavy',dmg:180,rate:1200,range:80,ammo:1,res:6,reload:2000,recoil:10,spread:.04,auto:false,price:1400,ds:10,ss:3,rs:6,as:5,sfx:'explosion',col:'#88aa44' },
 };
 
-// Current weapon state
-window.weaponState = {
-  current: null,
-  ammo: 0,
-  reserve: 0,
-  isReloading: false,
-  lastFired: 0,
-  isFiring: false,
-  fireInterval: null,
+window.WS = {
+  current: null, ammo: 0, reserve: 0,
+  isReloading: false, lastFired: 0, isFiring: false, _interval: null,
 };
 
-// ──────────────────────────────────────────────────
-// Equip a weapon
-// ──────────────────────────────────────────────────
-function equipWeapon(weaponId) {
-  const w = WEAPONS[weaponId];
-  if (!w) return;
-  weaponState.current = w;
-  weaponState.ammo = w.maxAmmo;
-  weaponState.reserve = w.reserve;
-  weaponState.isReloading = false;
-  window.currentPlayer.equippedWeapon = weaponId;
+function equipWeapon(id) {
+  const w = window.WEAPONS[id]; if (!w) return;
+  window.WS.current = w; window.WS.ammo = w.ammo; window.WS.reserve = w.res;
+  window.WS.isReloading = false;
+  window.currentPlayer.equippedWeapon = id;
   updateAmmoHUD();
 }
 
-// ──────────────────────────────────────────────────
-// Fire weapon
-// ──────────────────────────────────────────────────
-function fireWeapon(scene, camera, players) {
-  const ws = weaponState;
-  const w = ws.current;
-  if (!w || ws.isReloading) return false;
+function startFiring() {
+  const w = window.WS.current; if (!w) return;
+  window.WS.isFiring = true;
+  window._isShooting = true;
+  if (w.auto) {
+    window.WS._interval = setInterval(() => { if (window.gameRunning && !window.gamePaused) doShot(); }, w.rate);
+  } else { doShot(); }
+}
 
+function stopFiring() {
+  window.WS.isFiring = false; window._isShooting = false;
+  if (window.WS._interval) { clearInterval(window.WS._interval); window.WS._interval = null; }
+}
+
+function doShot() {
+  const ws = window.WS; const w = ws.current;
+  if (!w || ws.isReloading) return;
   const now = Date.now();
-  if (now - ws.lastFired < w.fireRate) return false;
-  if (ws.ammo <= 0) { reloadWeapon(); return false; }
-
-  ws.lastFired = now;
-  ws.ammo--;
-  updateAmmoHUD();
-  playSFX('shoot');
-
-  // Crosshair feedback
-  const ch = document.getElementById('crosshair');
-  if (ch) {
-    ch.classList.add('firing');
-    setTimeout(() => ch.classList.remove('firing'), 80);
-  }
-
-  // Show muzzle flash
+  if (now - ws.lastFired < w.rate) return;
+  if (ws.ammo <= 0) { doReload(); return; }
+  ws.lastFired = now; ws.ammo--;
+  updateAmmoHUD(); playSFX(w.sfx || 'shoot_rifle');
   showMuzzleFlash();
-
-  // Recoil to crosshair (spread-based visual)
-  if (scene && camera) {
-    castBullet(scene, camera, w, players);
-  }
-
-  if (ws.ammo <= 0 && ws.reserve > 0) {
-    setTimeout(() => reloadWeapon(), 300);
-  }
-  return true;
+  const ch = document.getElementById('crosshair');
+  if (ch) { ch.classList.add('firing'); setTimeout(() => ch.classList.remove('firing'), 90); }
+  castBullet(w);
+  if (window._mpChannel) window._mpChannel.send({ type:'broadcast', event:'player_shoot', payload:{ id: window.currentPlayer.id }});
+  if (ws.ammo <= 0 && ws.reserve > 0) setTimeout(doReload, 300);
 }
 
-function reloadWeapon() {
-  const ws = weaponState;
-  const w = ws.current;
-  if (!w || ws.isReloading || ws.ammo === w.maxAmmo || ws.reserve <= 0) return;
-
+function doReload() {
+  const ws = window.WS; const w = ws.current;
+  if (!w || ws.isReloading || ws.ammo === w.ammo || ws.reserve <= 0) return;
   ws.isReloading = true;
-  showReloadIndicator(w.reloadTime);
-
+  const wn = document.getElementById('wepName');
+  if (wn) { wn.textContent = 'RELOADING...'; wn.style.color = '#f0c040'; }
+  playSFX('reload');
   setTimeout(() => {
-    const needed = w.maxAmmo - ws.ammo;
-    const give = Math.min(needed, ws.reserve);
-    ws.ammo += give;
-    ws.reserve -= give;
+    const need = w.ammo - ws.ammo;
+    const give = Math.min(need, ws.reserve);
+    ws.ammo += give; ws.reserve -= give;
     ws.isReloading = false;
     updateAmmoHUD();
-  }, w.reloadTime);
+    if (wn) { wn.textContent = w.name; wn.style.color = ''; }
+  }, w.reload);
 }
 
-function startShooting() {
-  const w = weaponState.current;
-  if (!w) return;
-  weaponState.isFiring = true;
-  if (w.automatic) {
-    weaponState.fireInterval = setInterval(() => {
-      if (window.gameRunning) fireWeapon(window._scene, window._camera, window._enemies);
-    }, w.fireRate);
-  } else {
-    if (window.gameRunning) fireWeapon(window._scene, window._camera, window._enemies);
-  }
-}
-
-function stopShooting() {
-  weaponState.isFiring = false;
-  if (weaponState.fireInterval) {
-    clearInterval(weaponState.fireInterval);
-    weaponState.fireInterval = null;
-  }
-}
-
-// ──────────────────────────────────────────────────
-// Bullet Raycast (Three.js)
-// ──────────────────────────────────────────────────
-function castBullet(scene, camera, weapon, enemies) {
-  if (!THREE || !scene || !camera) return;
-
-  // Apply spread
-  const spread = weapon.spread * (window.isAiming ? 0.3 : 1.0);
-  const direction = new THREE.Vector3(
-    (Math.random() - 0.5) * spread,
-    (Math.random() - 0.5) * spread,
-    -1
-  ).normalize();
-  direction.applyQuaternion(camera.quaternion);
-
-  const raycaster = new THREE.Raycaster(camera.position.clone(), direction, 0.1, weapon.range);
-  const targets = (enemies || []).map(e => e.mesh).filter(Boolean);
-  const walls = window._wallMeshes || [];
-  const allTargets = [...targets, ...walls];
-
-  if (allTargets.length === 0) return;
-
-  const hits = raycaster.intersectObjects(allTargets, true);
-  if (hits.length > 0) {
+function castBullet(w) {
+  const scene = window._scene; const cam = window._camera;
+  if (!THREE || !scene || !cam) return;
+  const spread = w.spread * (window._isAiming ? 0.25 : 1.0);
+  const dir = new THREE.Vector3(
+    (Math.random() - .5) * spread, (Math.random() - .5) * spread, -1
+  ).normalize().applyQuaternion(cam.quaternion);
+  const ray = new THREE.Raycaster(cam.position.clone(), dir, 0.1, w.range);
+  const targets = [...(window._enemies || []).map(e => e.mesh).filter(Boolean),
+                   ...(window._wallMeshes || []), ...(window._pickupMeshes || [])];
+  if (!targets.length) return;
+  const hits = ray.intersectObjects(targets, true);
+  if (hits.length) {
     const hit = hits[0];
-    showBulletImpact(hit.point, scene);
-
-    // Check if hit an enemy
-    const hitEnemy = (enemies || []).find(e => {
+    spawnImpact(hit.point);
+    // Check enemy hit
+    const hitEnemy = (window._enemies || []).find(e => {
       if (!e.mesh) return false;
-      const box = new THREE.Box3().setFromObject(e.mesh);
-      return box.containsPoint(hit.point);
+      const b = new THREE.Box3().setFromObject(e.mesh);
+      return b.containsPoint(hit.point);
     });
-    if (hitEnemy) {
-      damageEnemy(hitEnemy, weapon.damage);
-      showHitMarker();
-    }
+    if (hitEnemy) { damageEnemy(hitEnemy, w.dmg); showHitMarker(); return; }
+    // Check pickup hit (ignore)
+    spawnBulletTrail(cam.position.clone(), hit.point);
+  } else {
+    const far = cam.position.clone().addScaledVector(dir, w.range);
+    spawnBulletTrail(cam.position.clone(), far);
   }
-
-  // Bullet trail
-  showBulletTrail(camera.position.clone(), hits.length > 0 ? hits[0].point : camera.position.clone().addScaledVector(direction, weapon.range), scene);
 }
 
-// ──────────────────────────────────────────────────
-// Visual Effects
-// ──────────────────────────────────────────────────
 function showMuzzleFlash() {
-  const flash = document.createElement('div');
-  flash.style.cssText = `
-    position:fixed;top:50%;left:52%;
-    width:20px;height:20px;
-    border-radius:50%;
-    background:radial-gradient(circle,rgba(255,220,100,0.95),rgba(255,100,20,0.4),transparent);
-    transform:translate(-50%,-50%);
-    pointer-events:none;z-index:25;
-    animation:recoilAnim 0.12s ease forwards;
-  `;
-  document.body.appendChild(flash);
-  setTimeout(() => flash.remove(), 120);
+  const f = document.createElement('div');
+  f.style.cssText = 'position:fixed;top:50%;left:52%;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,80,.98),rgba(255,100,20,.45),transparent);transform:translate(-50%,-50%);pointer-events:none;z-index:25;animation:none';
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 90);
 }
 
 function showHitMarker() {
-  const hm = document.createElement('div');
-  hm.style.cssText = `
-    position:fixed;top:50%;left:50%;
-    width:16px;height:16px;
-    border:2px solid rgba(255,60,95,0.9);
-    transform:translate(-50%,-50%) rotate(45deg);
-    pointer-events:none;z-index:25;
-    animation:hitMarker 0.25s ease forwards;
-  `;
-  document.body.appendChild(hm);
-  setTimeout(() => hm.remove(), 250);
+  const h = document.createElement('div');
+  h.style.cssText = 'position:fixed;top:50%;left:50%;width:16px;height:16px;border:2.5px solid rgba(255,60,95,.95);transform:translate(-50%,-50%) rotate(45deg);pointer-events:none;z-index:25';
+  document.body.appendChild(h);
+  requestAnimationFrame(() => { h.style.transition = 'all .22s ease'; h.style.opacity = '0'; h.style.transform = 'translate(-50%,-50%) rotate(45deg) scale(2)'; });
+  setTimeout(() => h.remove(), 240);
 }
 
-function showReloadIndicator(duration) {
-  const el = document.getElementById('weaponName');
-  if (!el) return;
-  el.textContent = 'RELOADING...';
-  el.style.color = '#f0c040';
-  setTimeout(() => {
-    el.textContent = weaponState.current?.name || '';
-    el.style.color = '';
-  }, duration);
+function spawnImpact(pt) {
+  if (!window._scene) return;
+  const g = new THREE.SphereGeometry(.06, 4, 4);
+  const m = new THREE.MeshBasicMaterial({ color: 0xffee44 });
+  const mesh = new THREE.Mesh(g, m); mesh.position.copy(pt);
+  window._scene.add(mesh);
+  setTimeout(() => { window._scene.remove(mesh); g.dispose(); m.dispose(); }, 350);
 }
 
-function showBulletImpact(point, scene) {
-  if (!THREE || !scene) return;
-  const geo = new THREE.SphereGeometry(0.05, 4, 4);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-  const impact = new THREE.Mesh(geo, mat);
-  impact.position.copy(point);
-  scene.add(impact);
-  setTimeout(() => { scene.remove(impact); geo.dispose(); mat.dispose(); }, 500);
+function spawnBulletTrail(from, to) {
+  if (!window._scene) return;
+  const g = new THREE.BufferGeometry().setFromPoints([from, to]);
+  const m = new THREE.LineBasicMaterial({ color: 0xffffaa, transparent: true, opacity: .45 });
+  const line = new THREE.Line(g, m);
+  window._scene.add(line);
+  setTimeout(() => { window._scene.remove(line); g.dispose(); m.dispose(); }, 75);
 }
 
-function showBulletTrail(from, to, scene) {
-  if (!THREE || !scene) return;
-  const points = [from, to];
-  const geo = new THREE.BufferGeometry().setFromPoints(points);
-  const mat = new THREE.LineBasicMaterial({ color: 0xffff88, transparent: true, opacity: 0.5 });
-  const line = new THREE.Line(geo, mat);
-  scene.add(line);
-  setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 80);
-}
+// Gun 3D model (detailed boxes for each weapon type)
+function buildGunMesh(weaponId) {
+  const group = new THREE.Group();
+  const w = window.WEAPONS[weaponId] || window.WEAPONS.pistol;
+  const col = parseInt(w.col.replace('#',''), 16);
+  const dark = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  const metal = new THREE.MeshLambertMaterial({ color: 0x333344 });
+  const main = new THREE.MeshLambertMaterial({ color: col });
+  const scope = new THREE.MeshLambertMaterial({ color: 0x222222 });
 
-// ──────────────────────────────────────────────────
-// Damage enemy
-// ──────────────────────────────────────────────────
-function damageEnemy(enemy, damage) {
-  enemy.health = (enemy.health || 100) - damage;
-  if (enemy.health <= 0) {
-    killEnemy(enemy);
-  } else {
-    flashEnemyHit(enemy);
-  }
-}
-
-function killEnemy(enemy) {
-  if (enemy.dead) return;
-  enemy.dead = true;
-  if (window._scene && enemy.mesh) {
-    window._scene.remove(enemy.mesh);
-  }
-  window.currentPlayer.kills++;
-  addXP(50);
-  addCoins(25);
-  addKillFeedEntry(window.currentPlayer.name, enemy.name || 'ENEMY', weaponState.current?.name || 'PISTOL');
-  updateHUD();
-  // Remove from enemies array
-  if (window._enemies) {
-    window._enemies = window._enemies.filter(e => e !== enemy);
-  }
-}
-
-function flashEnemyHit(enemy) {
-  if (!enemy.mesh) return;
-  enemy.mesh.traverse(child => {
-    if (child.isMesh && child.material) {
-      const orig = child.material.color?.getHex();
-      child.material.color?.setHex(0xff4444);
-      setTimeout(() => child.material.color?.setHex(orig || 0xffffff), 100);
+  if (w.cat === 'pistol') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(.08,.1,.22), main); body.position.set(0, 0, -.05); group.add(body);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.18), metal); barrel.position.set(0,.04,-.2); group.add(barrel);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(.06,.18,.08), dark); handle.position.set(0,-.1,.02); group.add(handle);
+    const trigger = new THREE.Mesh(new THREE.BoxGeometry(.015,.06,.015), metal); trigger.position.set(0,-.05,-.04); group.add(trigger);
+  } else if (w.cat === 'rifle' || w.id === 'ak47' || w.id === 'assault' || w.id === 'smg') {
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(.07,.09,.44), metal); group.add(receiver);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(.035,.035,.28), dark); barrel.position.set(0,.025,-.36); group.add(barrel);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(.06,.1,.22), main); stock.position.set(0,-.01,.32); group.add(stock);
+    const mag = new THREE.Mesh(new THREE.BoxGeometry(.055,.18,.07), dark); mag.position.set(0,-.14,0); group.add(mag);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(.055,.16,.07), dark); handle.position.set(0,-.12,.15); group.add(handle);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(.072,.02,.35), scope); rail.position.set(0,.07,.0); group.add(rail);
+    // Suppressor for SMG
+    if (w.id === 'smg') {
+      const sup = new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.12,8), dark); sup.rotation.z = Math.PI/2; sup.position.set(0,.025,-.52); group.add(sup);
     }
-  });
+  } else if (w.id === 'sniper') {
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(.065,.085,.55), dark); group.add(receiver);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(.03,.03,.4), metal); barrel.position.set(0,.01,-.47); group.add(barrel);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(.055,.1,.28), main); stock.position.set(0,-.01,.41); group.add(stock);
+    const scopeBody = new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.25,8), scope); scopeBody.rotation.z = Math.PI/2; scopeBody.position.set(0,.085,-.05); group.add(scopeBody);
+    const mag = new THREE.Mesh(new THREE.BoxGeometry(.04,.1,.06), dark); mag.position.set(0,-.09,.05); group.add(mag);
+    const bipod1 = new THREE.Mesh(new THREE.BoxGeometry(.005,.14,.005), metal); bipod1.position.set(-.04,.025,-.35); bipod1.rotation.z = .35; group.add(bipod1);
+    const bipod2 = new THREE.Mesh(new THREE.BoxGeometry(.005,.14,.005), metal); bipod2.position.set(.04,.025,-.35); bipod2.rotation.z = -.35; group.add(bipod2);
+  } else if (w.cat === 'heavy') {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.65,10), dark); tube.rotation.z = Math.PI/2; tube.position.set(0,0,-.1); group.add(tube);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(.06,.16,.07), main); handle.position.set(0,-.1,.15); group.add(handle);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.25), metal); body.position.set(0,0,.2); group.add(body);
+  }
+
+  group.scale.setScalar(1);
+  return group;
 }
 
-// ──────────────────────────────────────────────────
-// HUD Update
-// ──────────────────────────────────────────────────
+window._isAiming = false;
+function startAiming() { window._isAiming = true; document.getElementById('crosshair')?.classList.add('aiming'); if (window._camera) window._camera._targetFOV = 38; }
+function stopAiming() { window._isAiming = false; document.getElementById('crosshair')?.classList.remove('aiming'); if (window._camera) window._camera._targetFOV = 72; }
+
 function updateAmmoHUD() {
-  const ws = weaponState;
-  const el1 = document.getElementById('ammoCount');
-  const el2 = document.getElementById('ammoReserve');
-  const el3 = document.getElementById('weaponName');
-  if (el1) el1.textContent = ws.ammo;
-  if (el2) el2.textContent = ws.reserve;
-  if (el3 && ws.current) el3.textContent = ws.current.name;
-}
-
-// ──────────────────────────────────────────────────
-// Aiming
-// ──────────────────────────────────────────────────
-window.isAiming = false;
-function startAiming() {
-  window.isAiming = true;
-  document.getElementById('crosshair')?.classList.add('aiming');
-  // FOV zoom handled in game.js
-  if (window._camera) {
-    window._camera._targetFOV = 40;
-  }
-}
-function stopAiming() {
-  window.isAiming = false;
-  document.getElementById('crosshair')?.classList.remove('aiming');
-  if (window._camera) {
-    window._camera._targetFOV = 75;
-  }
+  const ws = window.WS;
+  const m = document.getElementById('ammoMag'); if (m) m.textContent = ws.ammo;
+  const r = document.getElementById('ammoRes'); if (r) r.textContent = ws.reserve;
+  const n = document.getElementById('wepName'); if (n && !ws.isReloading) { n.textContent = ws.current?.name || ''; n.style.color = ws.current?.col || ''; }
 }
