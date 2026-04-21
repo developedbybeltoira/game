@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>REALM — Urban Battleground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════ CINEMATIC INTRO ═══════════════ -->
+<div id="cinematic" class="cinematic-overlay">
+  <canvas id="introCanvas"></canvas>
+  <div class="cinematic-ui">
+    <div class="cin-text-wrap">
+      <div class="cin-line" id="cin1">REALM</div>
+      <div class="cin-sub" id="cin2">SIMULATION INITIALIZING</div>
+      <div class="cin-billboard" id="cin3">REALM ACTIVE</div>
+      <div class="cin-voice" id="cin4">"Welcome to REALM. This city is now the battlefield.<br>Only the strongest survive."</div>
+      <div class="cin-progress"><div class="cin-progress-bar" id="cinBar"></div></div>
+    </div>
+  </div>
+  <div class="cin-skip" onclick="skipIntro()">SKIP INTRO ›</div>
+</div>
+
+<!-- ═══════════════ HOME SCREEN ═══════════════ -->
+<div id="homeScreen" class="screen hidden">
+  <div class="home-bg">
+    <canvas id="homeBgCanvas"></canvas>
+    <div class="home-overlay-grid"></div>
+  </div>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="profile-chip" id="profileChip">
+      <img id="profileAvatar" src="" alt="" class="avatar-img" />
+      <div class="profile-info">
+        <span class="profile-name" id="profileName">AGENT</span>
+        <span class="profile-level" id="profileLevel">LVL 1</span>
+      </div>
+    </div>
+    <div class="top-stats">
+      <div class="stat-chip">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#f0c040"/><text x="12" y="16" text-anchor="middle" font-size="10" fill="#000" font-weight="bold">C</text></svg>
+        <span id="coinDisplay">0</span>
+      </div>
+      <div class="stat-chip">
+        <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" fill="#f0c040"/></svg>
+        <span id="xpDisplay">0 XP</span>
+      </div>
+    </div>
+    <button class="icon-btn" onclick="openSettings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    </button>
+  </div>
+
+  <!-- Logo -->
+  <div class="home-logo">
+    <div class="logo-realm">REALM</div>
+    <div class="logo-tagline">URBAN BATTLEGROUND</div>
+    <div class="logo-pulse"></div>
+  </div>
+
+  <!-- Main Buttons -->
+  <div class="main-menu">
+    <button class="menu-btn primary" onclick="startGame('solo')">
+      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg></span>
+      <span class="btn-text">PLAY SOLO</span>
+      <span class="btn-arrow">›</span>
+    </button>
+    <button class="menu-btn" onclick="startGame('robots')">
+      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 012 2v1h3a1 1 0 011 1v2a1 1 0 01-1 1h-.5l-1 10H8.5l-1-10H7a1 1 0 01-1-1V6a1 1 0 011-1h3V4a2 2 0 012-2zm-2 7h4l.8 8H9.2L10 9zm-2-3v1h8V6H8z"/></svg></span>
+      <span class="btn-text">VS ROBOTS</span>
+      <span class="btn-arrow">›</span>
+    </button>
+    <button class="menu-btn" onclick="startGame('two-player')">
+      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5c0-2.3-4.7-3.5-7-3.5zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg></span>
+      <span class="btn-text">TWO PLAYER</span>
+      <span class="btn-arrow">›</span>
+    </button>
+    <button class="menu-btn glow" onclick="startGame('multiplayer')">
+      <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg></span>
+      <span class="btn-text">MULTIPLAYER</span>
+      <span class="btn-badge">ONLINE</span>
+      <span class="btn-arrow">›</span>
+    </button>
+    <div class="menu-row">
+      <button class="menu-btn half" onclick="openShop()">
+        <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5.8 6H20l-1.5 9H7L5.8 6zM3 2H1v2h2l3.6 7.6L5.2 14c-.1.3-.2.6-.2 1 0 1.1.9 2 2 2h14v-2H7.4c-.1 0-.2-.1-.2-.2l.1-.3 1-1.8H17c.8 0 1.4-.4 1.8-1l3.2-5.8c.2-.3.2-.8-.2-1.2-.2-.2-.5-.3-.8-.3H5.2L4.3 2H3z"/></svg></span>
+        <span class="btn-text">WEAPON SHOP</span>
+      </button>
+      <button class="menu-btn half" onclick="openUpgrade()">
+        <span class="btn-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7l8 5 8-5-8-5zM4 12l8 5 8-5M4 17l8 5 8-5"/></svg></span>
+        <span class="btn-text">UPGRADE</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ WEAPON SHOP ═══════════════ -->
+<div id="shopScreen" class="screen hidden">
+  <div class="shop-header">
+    <button class="back-btn" onclick="closeShop()">‹ BACK</button>
+    <h2 class="shop-title">WEAPON SHOP</h2>
+    <div class="coins-display">
+      <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="#f0c040"/><text x="12" y="16" text-anchor="middle" font-size="10" fill="#000" font-weight="bold">C</text></svg>
+      <span id="shopCoins">0</span>
+    </div>
+  </div>
+  <div class="shop-grid" id="shopGrid"></div>
+</div>
+
+<!-- ═══════════════ SETTINGS ═══════════════ -->
+<div id="settingsScreen" class="screen hidden">
+  <div class="shop-header">
+    <button class="back-btn" onclick="closeSettings()">‹ BACK</button>
+    <h2 class="shop-title">SETTINGS</h2>
+  </div>
+  <div class="settings-body">
+    <div class="setting-row">
+      <span>Music</span>
+      <label class="toggle"><input type="checkbox" id="musicToggle" checked onchange="toggleMusic(this.checked)"><span class="slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span>Sound FX</span>
+      <label class="toggle"><input type="checkbox" id="sfxToggle" checked onchange="toggleSFX(this.checked)"><span class="slider"></span></label>
+    </div>
+    <div class="setting-row">
+      <span>Graphics</span>
+      <select id="graphicsSelect" class="settings-select">
+        <option value="ultra">Ultra</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>Upload Music (.mp3)</span>
+      <label class="file-upload-btn">
+        CHOOSE FILE
+        <input type="file" accept=".mp3,audio/*" onchange="uploadMusic(this)" style="display:none"/>
+      </label>
+    </div>
+    <div class="setting-row" id="currentMusicRow" style="display:none">
+      <span>Now Playing</span>
+      <span id="currentMusicName" class="music-name">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ GAME CANVAS ═══════════════ -->
+<div id="gameContainer" class="hidden">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hud">
+    <div class="hud-health">
+      <div class="hud-label">HEALTH</div>
+      <div class="hud-bar-wrap"><div class="hud-bar health-bar" id="healthBar"></div></div>
+      <span id="healthVal">100</span>
+    </div>
+    <div class="hud-center">
+      <div class="hud-mode" id="hudMode">SOLO</div>
+      <div class="hud-timer" id="hudTimer">05:00</div>
+      <div class="hud-kills">
+        <span id="killCount">0</span> KILLS
+      </div>
+    </div>
+    <div class="hud-ammo">
+      <div class="hud-label">AMMO</div>
+      <div class="ammo-display">
+        <span id="ammoCount">30</span><span class="ammo-sep">/</span><span id="ammoReserve">90</span>
+      </div>
+      <div class="weapon-name" id="weaponName">M4A1</div>
+    </div>
+    <div class="hud-minimap">
+      <canvas id="minimap" width="120" height="120"></canvas>
+      <div class="minimap-label">MAP</div>
+    </div>
+  </div>
+
+  <!-- Crosshair -->
+  <div id="crosshair" class="crosshair">
+    <div class="ch-line ch-top"></div>
+    <div class="ch-line ch-bottom"></div>
+    <div class="ch-line ch-left"></div>
+    <div class="ch-line ch-right"></div>
+    <div class="ch-dot"></div>
+  </div>
+
+  <!-- Kill Feed -->
+  <div id="killFeed" class="kill-feed"></div>
+
+  <!-- Mobile Controls -->
+  <div id="mobileControls" class="mobile-controls">
+    <div class="left-controls">
+      <div id="joystick" class="joystick-wrap">
+        <div class="joystick-base">
+          <div class="joystick-knob" id="joystickKnob"></div>
+        </div>
+      </div>
+      <div class="action-btns-left">
+        <button class="ctrl-btn" id="crouchBtn" ontouchstart="startAction('crouch')" ontouchend="endAction('crouch')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a2 2 0 100-4 2 2 0 000 4zm-5 7h10l-2-6H9l-2 6zm-1 2v4h2v-3h8v3h2v-4H6z"/></svg>
+          CROUCH
+        </button>
+        <button class="ctrl-btn" id="jumpBtn" ontouchstart="startAction('jump')" ontouchend="endAction('jump')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 6h3v6H9l3 4 3-4h-2V6h3L12 2zm-5 16v2h10v-2H7z"/></svg>
+          JUMP
+        </button>
+        <button class="ctrl-btn" id="dashBtn" ontouchstart="startAction('dash')" ontouchend="endAction('dash')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2.5L4.5 11H10v10.5l9.5-8.5H14V2.5z"/></svg>
+          DASH
+        </button>
+      </div>
+    </div>
+    <div class="right-controls">
+      <button class="fire-btn" id="fireBtn" ontouchstart="startShooting()" ontouchend="stopShooting()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h14.17l-4.58-4.59L14 5l7 7-7 7-1.41-1.42L16.17 13H3v-2z"/></svg>
+        FIRE
+      </button>
+      <div class="right-secondary">
+        <button class="ctrl-btn" id="aimBtn" ontouchstart="startAiming()" ontouchend="stopAiming()">AIM</button>
+        <button class="ctrl-btn" id="reloadBtn" onclick="reloadWeapon()">RELOAD</button>
+        <button class="ctrl-btn" id="vehicleBtn" onclick="toggleVehicle()">VEHICLE</button>
+        <button class="ctrl-btn shop-ctrl-btn" onclick="openInGameShop()">SHOP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause / Exit -->
+  <button class="pause-btn" onclick="pauseGame()">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+  </button>
+</div>
+
+<!-- ═══════════════ PAUSE MENU ═══════════════ -->
+<div id="pauseMenu" class="pause-overlay hidden">
+  <div class="pause-box">
+    <div class="pause-title">PAUSED</div>
+    <button class="menu-btn" onclick="resumeGame()">RESUME</button>
+    <button class="menu-btn" onclick="openInGameShop()">SHOP</button>
+    <button class="menu-btn danger" onclick="exitToMenu()">EXIT TO MENU</button>
+  </div>
+</div>
+
+<!-- ═══════════════ IN-GAME SHOP ═══════════════ -->
+<div id="inGameShop" class="in-game-shop hidden">
+  <div class="igs-header">
+    <span class="igs-title">ARMORY</span>
+    <button class="igs-close" onclick="closeInGameShop()">✕</button>
+  </div>
+  <div class="igs-grid" id="igsGrid"></div>
+</div>
+
+<!-- ═══════════════ GAME OVER ═══════════════ -->
+<div id="gameOver" class="game-over-overlay hidden">
+  <div class="go-box">
+    <div class="go-title" id="goTitle">ELIMINATED</div>
+    <div class="go-stats">
+      <div class="go-stat"><span>KILLS</span><span id="goKills">0</span></div>
+      <div class="go-stat"><span>TIME</span><span id="goTime">0:00</span></div>
+      <div class="go-stat"><span>XP EARNED</span><span id="goXP">+0</span></div>
+      <div class="go-stat"><span>COINS</span><span id="goCoins">+0</span></div>
+    </div>
+    <button class="menu-btn primary" onclick="playAgain()">PLAY AGAIN</button>
+    <button class="menu-btn" onclick="exitToMenu()">MAIN MENU</button>
+  </div>
+</div>
+
+<!-- Audio -->
+<audio id="bgMusic" loop></audio>
+<audio id="sfxShoot" src=""></audio>
+
+<script src="auth.js"></script>
+<script src="weapons.js"></script>
+<script src="characters.js"></script>
+<script src="vehicles.js"></script>
+<script src="multiplayer.js"></script>
+<script src="ui.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
